@@ -238,11 +238,7 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 			break
 		}
 
-		log.Println("Received reply: ", reply, "on replica", leader)
-
 		after := time.Now()
-
-		log.Println("Releasing")
 		orInfo.sema.Release(1)
 
 		orInfo.Lock()
