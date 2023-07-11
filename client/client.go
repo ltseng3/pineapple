@@ -148,9 +148,11 @@ func main() {
 }
 
 func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo) {
-	args := genericsmrproto.Propose{0 /* id */, state.Command{state.PUT, 0, 0}, 0 /* timestamp */} // @audit autodetermine proposal type
-	//args := genericsmrproto.Propose{0, state.Command{state.PUT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0}
-	log.Println("Proposing with command id", args.CommandId, "and timestamp", args.Timestamp)
+	args := genericsmrproto.Propose{
+		CommandId: 0,
+		Command:   state.Command{Op: state.PUT, K: 0, V: 0},
+		Timestamp: 0,
+	} // @audit autodetermine proposal type
 
 	conflictRand := rand.New(rand.NewSource(time.Now().UnixNano()))
 	zipf := zipfian.NewZipfianGenerator(*zKeys, *theta)

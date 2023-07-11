@@ -23,12 +23,14 @@ type Get struct {
 	ReplicaID int32
 	Instance  int32
 	Write     uint8
+	Key       int
 }
 
 type GetReply struct {
 	Instance int32
 	OK       uint8
 	Write    uint8
+	Key      int
 	Payload  Payload
 }
 
@@ -36,14 +38,12 @@ type Set struct {
 	ReplicaID int32
 	Instance  int32
 	Write     uint8
+	Key       int
 	Payload   Payload
 }
 
 type SetReply struct {
 	Instance int32
-	OK       uint8
-	Write    uint8
-	Payload  Payload
 }
 
 type Prepare struct {
