@@ -233,6 +233,8 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 	key := getReply.Key
 
 	// Save all received responses
+	log.Println("Got reply: ", getReply.Payload)
+
 	r.instanceSpace[getReply.Instance].receivedData =
 		append(r.instanceSpace[getReply.Instance].receivedData, getReply.Payload)
 
@@ -306,6 +308,7 @@ func (r *Replica) handleSet(set *pineappleproto.Set) {
 
 	// Sets received payload if latest timestamp seen
 	if set.Payload.Tag.Timestamp > r.data[set.Key].Tag.Timestamp {
+		log.Println("Setting key ", set.Key, " to: ", set.Payload)
 		r.data[set.Key] = set.Payload
 	}
 
