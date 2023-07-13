@@ -35,7 +35,7 @@ done
 go build -o program
 
 if [ "$1" = "master" ]; then
-  . pineapple -maddr "10.10.1.1" -N 3 &
+  ./program -maddr "10.10.1.1" -N 3 &
   sleep 0.5
 fi
 
