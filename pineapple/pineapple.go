@@ -259,6 +259,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			if getReply.Write == 1 {
 				write = true
 				newTag := pineappleproto.Tag{Timestamp: r.data[key].Tag.Timestamp + 1, ID: int(r.Id)}
+				log.Println(newTag)
 				r.data[key] = pineappleproto.Payload{Tag: newTag, Value: r.data[key].Value}
 			}
 			r.sync()
@@ -306,7 +307,6 @@ func (r *Replica) bcastSet(instance int32, write bool, key int, payload pineappl
 func (r *Replica) handleSet(set *pineappleproto.Set) {
 	var setReply *pineappleproto.SetReply
 
-	log.Println("Current key: ", set.Key, "; Current Timestamp: ", r.data[set.Key].Tag.Timestamp)
 	log.Println("Received timestamp: ", set.Payload.Tag.Timestamp)
 
 	// Sets received payload if latest timestamp seen
