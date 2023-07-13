@@ -32,7 +32,7 @@ for PORT_NUMBER in "${PORT_NUMBERS[@]}"; do
   fi
 done
 
-go build
+go build -o program
 
 if [ "$1" = "master" ]; then
   . pineapple -maddr "10.10.1.1" -N 3 &
