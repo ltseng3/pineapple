@@ -138,5 +138,4 @@ if __name__ == '__main__':
     files are stored on the remote client machines. Logs the metrics to stdout
     in json format.
     """
-    print(json.dumps(get_metrics(path.expanduser('/Users/xh/pineapple/'))))
-    #print(json.dumps(get_metrics(path.expanduser('~./pineapple/'))))
+    print(json.dumps(get_metrics(path.expanduser('~/go/src/pineapple/'))))
