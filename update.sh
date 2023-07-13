@@ -35,7 +35,7 @@ done
 go build
 
 if [ "$1" = "master" ]; then
-  ./pineapple -maddr "10.10.1.1" -N 3 &
+  pineapple -maddr "10.10.1.1" -N 3 &
   sleep 0.5
 fi
 
