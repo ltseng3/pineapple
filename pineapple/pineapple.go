@@ -68,10 +68,11 @@ type Replica struct {
 }
 
 type Instance struct {
-	cmds   []state.Command
-	ballot int32
-	status InstanceStatus
-	lb     *LeaderBookkeeping
+	cmds         []state.Command
+	receivedData []pineappleproto.Payload
+	ballot       int32
+	status       InstanceStatus
+	lb           *LeaderBookkeeping
 }
 
 type LeaderBookkeeping struct {
@@ -231,16 +232,24 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 	inst := r.instanceSpace[getReply.Instance]
 	key := getReply.Key
 
-	// Find the largest received timestamp
-	if getReply.Payload.Tag.Timestamp > r.data[key].Tag.Timestamp { // TODO: set key
-		r.data[key] = getReply.Payload // TODO: set key
-	}
+	// Save all received responses
+	r.instanceSpace[getReply.Instance].receivedData =
+		append(r.instanceSpace[getReply.Instance].receivedData, getReply.Payload)
 
 	// Send the new vt pair to all nodes after getting majority
 	if getReply.OK == TRUE {
 		inst.lb.getOKs++
 
 		if inst.lb.getOKs+1 > r.N>>1 {
+			// Find the largest received timestamp
+			for _, data := range r.instanceSpace[getReply.Instance].receivedData {
+				if data.Tag.Timestamp > r.data[key].Tag.Timestamp {
+					r.data[key] = getReply.Payload
+				}
+			}
+
+			r.instanceSpace[getReply.Instance].receivedData = nil // clear slice, no longer needed
+
 			write := false
 			inst.status = PREPARED
 			inst.lb.nacks = 0
@@ -615,10 +624,12 @@ func (r *Replica) handleCommitShort(commit *pineappleproto.CommitShort) {
 	inst := r.instanceSpace[commit.Instance]
 
 	if inst == nil {
-		r.instanceSpace[commit.Instance] = &Instance{nil,
-			commit.Ballot,
-			COMMITTED,
-			nil,
+		r.instanceSpace[commit.Instance] = &Instance{
+			cmds:         nil,
+			receivedData: nil,
+			ballot:       commit.Ballot,
+			status:       COMMITTED,
+			lb:           nil,
 		}
 	} else {
 		r.instanceSpace[commit.Instance].status = COMMITTED
