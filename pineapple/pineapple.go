@@ -306,6 +306,9 @@ func (r *Replica) bcastSet(instance int32, write bool, key int, payload pineappl
 func (r *Replica) handleSet(set *pineappleproto.Set) {
 	var setReply *pineappleproto.SetReply
 
+	log.Println("Current key: ", set.Key, "; Current Timestamp: ", r.data[set.Key].Tag.Timestamp)
+	log.Println("Received timestamp: ", set.Payload.Tag.Timestamp)
+
 	// Sets received payload if latest timestamp seen
 	if set.Payload.Tag.Timestamp > r.data[set.Key].Tag.Timestamp {
 		log.Println("Setting key ", set.Key, " to: ", set.Payload)
