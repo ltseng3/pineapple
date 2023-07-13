@@ -6,11 +6,11 @@ import (
 	"log"
 	"time"
 
-	"../fastrpc"
-	"../genericsmr"
-	"../genericsmrproto"
-	"../pineappleproto"
-	"../state"
+	"pineapple/fastrpc"
+	"pineapple/genericsmr"
+	"pineapple/genericsmrproto"
+	"pineapple/pineappleproto"
+	"pineapple/state"
 )
 
 const CLOCK = 1000 * 10

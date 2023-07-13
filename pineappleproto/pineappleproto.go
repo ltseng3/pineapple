@@ -1,6 +1,6 @@
 package pineappleproto
 
-import "../state"
+import "pineapple/state"
 
 const (
 	PREPARE uint8 = iota

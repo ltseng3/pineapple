@@ -1,7 +1,7 @@
 package paxosproto
 
 import (
-	"../state"
+	"pineapple/state"
 )
 
 const (

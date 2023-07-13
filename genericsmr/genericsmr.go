@@ -10,11 +10,11 @@ import (
 	"os"
 	"time"
 
-	"../rdtsc"
+	"pineapple/rdtsc"
 
-	"../fastrpc"
-	"../genericsmrproto"
-	"../state"
+	"pineapple/fastrpc"
+	"pineapple/genericsmrproto"
+	"pineapple/state"
 )
 
 const CHAN_BUFFER_SIZE = 200000
