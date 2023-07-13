@@ -233,7 +233,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 	key := getReply.Key
 
 	// Save all received responses
-	log.Println("Got reply: ", getReply.Payload)
+	//log.Println("Got reply: ", getReply.Payload)
 
 	r.instanceSpace[getReply.Instance].receivedData =
 		append(r.instanceSpace[getReply.Instance].receivedData, getReply.Payload)
