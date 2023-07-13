@@ -241,6 +241,8 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 		after := time.Now()
 		orInfo.sema.Release(1)
 
+		log.Println("Received reply: ", reply, "on replica", leader)
+
 		orInfo.Lock()
 		before := orInfo.startTimes[reply.CommandId]
 		isRead := orInfo.isRead[reply.CommandId]
