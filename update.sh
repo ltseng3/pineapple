@@ -1,5 +1,5 @@
 #!/bin/bash
-cd ../Pineapple || exit
+cd ../pineapple || exit
 git stash && git stash clear && git pull
 
 HOST=$(hostname | awk -F "." '{print $1}')
