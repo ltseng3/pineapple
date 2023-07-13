@@ -18,10 +18,10 @@ import (
 	"../pineapple"
 )
 
-var portnum *int = flag.Int("port", 7070, "Port # to listen on. Defaults to 7070")
-var masterAddr *string = flag.String("maddr", "", "Master address. Defaults to localhost.")
+var masterAddr *string = flag.String("maddr", "10.10.1.1", "Master address. Defaults to 10.10.1.1.")
 var masterPort *int = flag.Int("mport", 7087, "Master port.  Defaults to 7087.")
-var myAddr *string = flag.String("addr", "", "Server address (this machine). Defaults to localhost.")
+var myAddr *string = flag.String("addr", "10.10.1.1", "Server address (this machine). Defaults to 10.10.1.1.")
+var portnum *int = flag.Int("port", 7070, "Port # to listen on. Defaults to 7070")
 var doPineapple *bool = flag.Bool("pineapple", true, " Use Pineapple as the replication protocol. Defaults to true.")
 var procs *int = flag.Int("p", 2, "GOMAXPROCS. Defaults to 2")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")

@@ -14,7 +14,8 @@ import (
 	"./masterproto"
 )
 
-var portnum *int = flag.Int("port", 7087, "Port # to listen on. Defaults to 7087")
+var masterAddr *string = flag.String("maddr", "10.10.1.1", "Master address. Defaults to 10.10.1.1.")
+var masterPort *int = flag.Int("mport", 7087, "Master port.  Defaults to 7087.")
 var numNodes *int = flag.Int("N", 3, "Number of replicas. Defaults to 3.")
 
 type Master struct {
@@ -31,7 +32,7 @@ type Master struct {
 func main() {
 	flag.Parse()
 
-	log.Printf("Master starting on port %d\n", *portnum)
+	log.Printf("Master starting on port %d\n", *masterPort)
 	log.Printf("...waiting for %d replicas\n", *numNodes)
 
 	master := &Master{*numNodes,
@@ -48,7 +49,7 @@ func main() {
 	rpc.Register(master)
 	log.Printf("registered master \n")
 	rpc.HandleHTTP()
-	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", *portnum))
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", *masterAddr, *masterPort))
 	if err != nil {
 		log.Fatal("Master listen error:", err)
 	}
