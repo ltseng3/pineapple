@@ -493,7 +493,11 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	r.sync()
 
 	// Construct the pineapple payload from proposal data
-	r.bcastGet(instNo, false, key) // @audit autodetermine proposal type here
+	if propose.Command.Op == state.PUT { // write operation
+		r.bcastGet(instNo, true, key)
+	} else if propose.Command.Op == state.GET { // read operation
+		r.bcastGet(instNo, false, key)
+	}
 
 	// Use Paxos if operation is not Read / Write
 	if propose.Command.Op != state.PUT || propose.Command.Op != state.GET {
