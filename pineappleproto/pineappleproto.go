@@ -1,4 +1,4 @@
-package pineapplereplicaproto
+package pineappleproto
 
 import "../state"
 

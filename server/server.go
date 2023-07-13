@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"../masterproto"
-	"../pineapplereplica"
+	"../pineapple"
 )
 
 var portnum *int = flag.Int("port", 7070, "Port # to listen on. Defaults to 7070")
@@ -53,7 +53,7 @@ func main() {
 
 	if *doPineapple {
 		log.Println("Starting Pineapple replica...")
-		rep := pineapplereplica.NewReplica(replicaId, nodeList, *exec, *dreply)
+		rep := pineapple.NewReplica(replicaId, nodeList, *exec, *dreply)
 		rpc.Register(rep)
 	}
 
