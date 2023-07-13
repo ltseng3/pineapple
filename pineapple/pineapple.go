@@ -262,7 +262,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 				r.data[key] = pineappleproto.Payload{Tag: newTag, Value: r.data[key].Value}
 			}
 			r.sync()
-			r.bcastSet(getReply.Instance, write, key, getReply.Payload)
+			r.bcastSet(getReply.Instance, write, key, r.data[key])
 		}
 	}
 }
