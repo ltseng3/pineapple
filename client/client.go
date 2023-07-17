@@ -283,7 +283,7 @@ func printer(readings chan *response) {
 
 	for {
 		time.Sleep(time.Second)
-
+		log.Println("Here2")
 		count := len(readings)
 		var sum float64 = 0
 		var commitSum float64 = 0
