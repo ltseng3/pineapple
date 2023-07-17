@@ -161,7 +161,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 	queuedReqs := 0 // The number of poisson departures that have been missed
 
 	for id := int32(0); ; id++ {
-		log.Println("Here 164, id: ", id)
+		//log.Println("Here 164, id: ", id)
 		args.CommandId = id
 
 		// Determine key
@@ -195,7 +195,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 		if *poissonAvg == -1 { // Poisson disabled
 			log.Println("Here 199 id: ", id)
 			orInfo.sema.Acquire(context.Background(), 1)
-			log.Println("Here 201 id: ", id)
+			//log.Println("Here 201 id: ", id)
 		} else {
 			for {
 				if orInfo.sema.TryAcquire(1) {
