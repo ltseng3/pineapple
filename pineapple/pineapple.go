@@ -467,7 +467,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	key := int(propose.Command.K)
 	cmds[0] = propose.Command
 	proposals[0] = propose
-	log.Println("Got: ", key, "; value: ", propose.Command.V)
+	log.Println("Got: ", key, "; value: ", propose.Command.V, " op: ", propose.Command.Op)
 
 	// ABD
 	r.instanceSpace[instNo] = &Instance{
@@ -485,7 +485,6 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	r.recordCommands(cmds)
 	r.sync()
 
-	log.Println("KEy: ", key, " op: ", propose.Command.Op)
 	// Construct the pineapple payload from proposal data
 	if propose.Command.Op == state.PUT { // write operation
 		log.Println("Will bcast 1 key: ", key)
