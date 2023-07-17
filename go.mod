@@ -1,4 +1,4 @@
-module github.com/tigranb2/pineapple
+module pineapple
 
 go 1.20
 
