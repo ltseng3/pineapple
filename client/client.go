@@ -139,7 +139,7 @@ func main() {
 
 		orInfos[i] = orInfo
 	}
-
+	log.Println("Here 142")
 	if *singleClusterTest {
 		printerMultipleFile(readings, len(rlReply.ReplicaList), experimentStart, rampDown, rampUp, timeout)
 	} else {
@@ -221,6 +221,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 		orInfo.startTimes[id] = before
 		orInfo.Unlock()
 	}
+	log.Println("Here 224")
 }
 
 func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo, readings chan *response, leader int) {
@@ -261,6 +262,7 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 			leader,
 		}
 	}
+	log.Println("Here 264")
 }
 
 func printer(readings chan *response) {
