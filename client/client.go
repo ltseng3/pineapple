@@ -187,7 +187,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 				} else {
 					//args.Command.Op = state.PUT_BLIND
 				}
-			} else {
+			} else if *percentRMWs > 0 {
 				args.Command.Op = state.RMW // RMW operation
 			}
 		} else {
