@@ -215,7 +215,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 				queuedReqs += 1
 			}
 		}
-		log.Println("Here 219 id: ", id)
+		log.Println("Here 219 id: ", id) // TODO: CODE NOT REACHED w/ ID 3
 
 		before := time.Now()
 		writer.WriteByte(genericsmrproto.PROPOSE)
@@ -272,7 +272,6 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 }
 
 func printer(readings chan *response) {
-	log.Println("Here 268")
 	lattputFile, err := os.Create("lattput.txt")
 	if err != nil {
 		log.Println("Error creating lattput file", err)
@@ -290,16 +289,13 @@ func printer(readings chan *response) {
 	startTime := time.Now()
 
 	for {
-		log.Println("Here 286")
 		time.Sleep(time.Second)
 		count := len(readings)
 		var sum float64 = 0
 		var commitSum float64 = 0
 		endTime := time.Now() // Set to current time in case there are no readings
-		log.Println("Here 292, count: ", count)
 		for i := 0; i < count; i++ {
 			resp := <-readings
-			log.Println("here 295, ", resp)
 			// Log all to latency file
 			latFile.WriteString(fmt.Sprintf("%d %f %f\n", resp.receivedAt.UnixNano(), resp.rtt, resp.commitLatency))
 			log.Print("Latency: ", resp.rtt, " commit latency: ", resp.commitLatency, " isRead: ", resp.isRead, "\n")
@@ -307,7 +303,6 @@ func printer(readings chan *response) {
 			commitSum += resp.commitLatency
 			endTime = resp.receivedAt
 		}
-		log.Println("Here 303")
 		var avg float64
 		var avgCommit float64
 		var tput float64
