@@ -44,4 +44,4 @@ else
 
   go run server/server.go -maddr "10.10.1.1" -mport 7087 -addr "$IP" -port $PORT &
   sleep 0.5
-done
+fi
