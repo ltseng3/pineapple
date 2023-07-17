@@ -149,7 +149,7 @@ func main() {
 func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo) {
 	args := genericsmrproto.Propose{
 		CommandId: 0,
-		Command:   state.Command{Op: state.PUT, K: 0, V: 0},
+		Command:   state.Command{Op: state.PUT, K: 0, V: 1},
 		Timestamp: 0,
 	} // @audit autodetermine proposal type
 
