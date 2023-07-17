@@ -193,13 +193,13 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 		} else {
 			args.Command.Op = state.GET // read operation
 		}
-		log.Println("Here 199, type: ", args.Command.Op, " id: ", id)
+		log.Println("Here 196, type: ", args.Command.Op, " id: ", id)
 
 		if *poissonAvg == -1 { // Poisson disabled
+			log.Println("Here 199 id: ", id)
 			orInfo.sema.Acquire(context.Background(), 1)
 		} else {
 			for {
-				log.Println("Here 206 id: ", id)
 				if orInfo.sema.TryAcquire(1) {
 					if queuedReqs == 0 {
 						time.Sleep(poissonGenerator.NextArrival())
