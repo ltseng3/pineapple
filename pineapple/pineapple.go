@@ -456,7 +456,6 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 			return
 		}
 	*/
-	log.Println("Got: ", propose, "; value: ", propose.Command.V)
 	for r.instanceSpace[r.crtInstance] != nil {
 		r.crtInstance++
 	}
@@ -468,6 +467,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	key := int(propose.Command.K)
 	cmds[0] = propose.Command
 	proposals[0] = propose
+	log.Println("Got: ", key, "; value: ", propose.Command.V)
 
 	// ABD
 	r.instanceSpace[instNo] = &Instance{
@@ -517,7 +517,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 			r.bcastAccept(instNo, r.defaultBallot, cmds)
 		}
 	}
-	log.Println("Done with: ", propose, "; new val: ", r.data[key])
+	log.Println("Done with: ", key, ";  new val: ", r.data[key])
 }
 
 func (r *Replica) handlePrepare(prepare *pineappleproto.Prepare) {
