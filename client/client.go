@@ -162,6 +162,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 	queuedReqs := 0 // The number of poisson departures that have been missed
 
 	for id := int32(0); ; id++ {
+		log.Println("Here 165, id: ", id)
 		args.CommandId = id
 
 		// Determine key
@@ -242,8 +243,6 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 		after := time.Now()
 		orInfo.sema.Release(1)
 
-		log.Println("Received reply: ", reply, "on replica", leader)
-
 		orInfo.Lock()
 		before := orInfo.startTimes[reply.CommandId]
 		isRead := orInfo.isRead[reply.CommandId]
@@ -253,7 +252,7 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 		rtt := (after.Sub(before)).Seconds() * 1000
 		//commitToExec := float64(reply.Timestamp) / 1e6
 		commitLatency := float64(0) //rtt - commitToExec
-		log.Println("rtt: ", rtt)
+
 		readings <- &response{
 			after,
 			rtt,
