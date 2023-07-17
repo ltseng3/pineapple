@@ -319,8 +319,7 @@ func (r *Replica) handleSetReply(setReply *pineappleproto.SetReply) {
 	inst := r.instanceSpace[setReply.Instance]
 
 	inst.lb.setOKs++
-	log.Println("Here...")
-	time.Sleep(time.Second)
+
 	// Wait for a majority of acknowledgements
 	if inst.lb.setOKs+1 > r.N>>1 {
 		if inst.lb.clientProposals != nil && r.Dreply && !inst.lb.completed {
@@ -457,7 +456,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 			return
 		}
 	*/
-	log.Println("Got: ", propose)
+	log.Println("Got: ", propose, "; value: ", propose.Command.V)
 	for r.instanceSpace[r.crtInstance] != nil {
 		r.crtInstance++
 	}
@@ -518,7 +517,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 			r.bcastAccept(instNo, r.defaultBallot, cmds)
 		}
 	}
-	log.Println("Done with: ", propose)
+	log.Println("Done with: ", propose, "; new val: ", r.data[key])
 }
 
 func (r *Replica) handlePrepare(prepare *pineappleproto.Prepare) {
