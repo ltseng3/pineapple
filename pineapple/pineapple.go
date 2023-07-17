@@ -485,6 +485,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	r.recordCommands(cmds)
 	r.sync()
 
+	log.Println("KEy: ", key, " op: ", propose.Command.Op)
 	// Construct the pineapple payload from proposal data
 	if propose.Command.Op == state.PUT { // write operation
 		log.Println("Will bcast 1 key: ", key)
