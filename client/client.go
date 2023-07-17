@@ -173,7 +173,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 				//args.Command.K = state.Key(*startRange + 43 + int(id % 888))
 				args.Command.K = state.Key(int32(*startRange) + 43 + id)
 			}
-			log.Println("Here 179, id: ", id)
+			log.Println("Here 179, key: ", args.Command.K, " id: ", id)
 		} else {
 			args.Command.K = state.Key(zipf.NextNumber())
 			log.Println("Here 182")
