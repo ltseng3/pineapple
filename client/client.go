@@ -139,12 +139,9 @@ func main() {
 
 		orInfos[i] = orInfo
 	}
-	log.Println("Here 142")
 	if *singleClusterTest {
-		log.Println("Here 144")
 		printerMultipleFile(readings, len(rlReply.ReplicaList), experimentStart, rampDown, rampUp, timeout)
 	} else {
-		log.Println("Here 147")
 		printer(readings)
 	}
 }
@@ -164,7 +161,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 	queuedReqs := 0 // The number of poisson departures that have been missed
 
 	for id := int32(0); ; id++ {
-		log.Println("Here 165, id: ", id)
+		log.Println("Here 164, id: ", id)
 		args.CommandId = id
 
 		// Determine key
