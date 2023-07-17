@@ -456,7 +456,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 			return
 		}
 	*/
-
+	log.Println("Got: ", propose)
 	for r.instanceSpace[r.crtInstance] != nil {
 		r.crtInstance++
 	}
