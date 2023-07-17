@@ -319,7 +319,8 @@ func (r *Replica) handleSetReply(setReply *pineappleproto.SetReply) {
 	inst := r.instanceSpace[setReply.Instance]
 
 	inst.lb.setOKs++
-
+	log.Println("Here...")
+	time.Sleep(time.Second)
 	// Wait for a majority of acknowledgements
 	if inst.lb.setOKs+1 > r.N>>1 {
 		if inst.lb.clientProposals != nil && r.Dreply && !inst.lb.completed {
