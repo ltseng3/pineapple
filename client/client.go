@@ -198,6 +198,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 		if *poissonAvg == -1 { // Poisson disabled
 			log.Println("Here 199 id: ", id)
 			orInfo.sema.Acquire(context.Background(), 1)
+			log.Println("Here 201 id: ", id)
 		} else {
 			for {
 				if orInfo.sema.TryAcquire(1) {
