@@ -232,9 +232,6 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 	inst := r.instanceSpace[getReply.Instance]
 	key := getReply.Key
 
-	// Save all received responses
-	//log.Println("Got reply: ", getReply.Payload)
-
 	r.instanceSpace[getReply.Instance].receivedData =
 		append(r.instanceSpace[getReply.Instance].receivedData, getReply.Payload)
 
@@ -259,7 +256,6 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			if getReply.Write == 1 {
 				write = true
 				newTag := pineappleproto.Tag{Timestamp: r.data[key].Tag.Timestamp + 1, ID: int(r.Id)}
-				log.Println(newTag)
 				r.data[key] = pineappleproto.Payload{Tag: newTag, Value: r.data[key].Value}
 			}
 			r.sync()
@@ -307,11 +303,8 @@ func (r *Replica) bcastSet(instance int32, write bool, key int, payload pineappl
 func (r *Replica) handleSet(set *pineappleproto.Set) {
 	var setReply *pineappleproto.SetReply
 
-	log.Println("Received timestamp: ", set.Payload.Tag.Timestamp)
-
 	// Sets received payload if latest timestamp seen
 	if set.Payload.Tag.Timestamp > r.data[set.Key].Tag.Timestamp {
-		log.Println("Setting key ", set.Key, " to: ", set.Payload)
 		r.data[set.Key] = set.Payload
 	}
 
@@ -335,7 +328,7 @@ func (r *Replica) handleSetReply(setReply *pineappleproto.SetReply) {
 				CommandId: inst.lb.clientProposals[0].CommandId,
 				Value:     state.NIL,
 				Timestamp: inst.lb.clientProposals[0].Timestamp}
-			log.Println("proposing reply: ", propreply)
+			log.Println(propreply)
 			r.ReplyProposeTS(propreply, inst.lb.clientProposals[0].Reply)
 			inst.lb.completed = true
 		}
