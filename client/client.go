@@ -315,6 +315,7 @@ func printer(readings chan *response) {
 			orInfos[i].Unlock()
 		}
 
+		log.Println("Here. ")
 		// Log summary to lattput file
 		lattputFile.WriteString(fmt.Sprintf("%d %f %f %d %d %f\n", endTime.UnixNano(),
 			avg, tput, count, totalOrs, avgCommit))
