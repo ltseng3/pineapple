@@ -356,7 +356,7 @@ func printerMultipleFile(readings chan *response, numLeader int, experimentStart
 	startTime := time.Now()
 	log.Println("Here 359")
 	for {
-		time.Sleep(time.Second * 10)
+		time.Sleep(time.Second)
 
 		count := len(readings)
 		var sum float64 = 0

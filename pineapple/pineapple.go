@@ -307,7 +307,7 @@ func (r *Replica) handleSet(set *pineappleproto.Set) {
 	if set.Payload.Tag.Timestamp > r.data[set.Key].Tag.Timestamp {
 		r.data[set.Key] = set.Payload
 	}
-
+	log.Println("Replying for: ", set.Key)
 	setReply = &pineappleproto.SetReply{Instance: set.Instance}
 
 	//r.sync()
