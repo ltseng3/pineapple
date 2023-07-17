@@ -328,7 +328,6 @@ func (r *Replica) handleSetReply(setReply *pineappleproto.SetReply) {
 				CommandId: inst.lb.clientProposals[0].CommandId,
 				Value:     state.NIL,
 				Timestamp: inst.lb.clientProposals[0].Timestamp}
-			log.Println(propreply)
 			r.ReplyProposeTS(propreply, inst.lb.clientProposals[0].Reply)
 			inst.lb.completed = true
 		}
