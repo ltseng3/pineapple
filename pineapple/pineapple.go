@@ -517,6 +517,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 			r.bcastAccept(instNo, r.defaultBallot, cmds)
 		}
 	}
+	log.Println("Done with: ", propose)
 }
 
 func (r *Replica) handlePrepare(prepare *pineappleproto.Prepare) {
