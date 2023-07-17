@@ -1,5 +1,5 @@
-module github.com/BCConsensus/pineapple
+module pineapple
 
-go 1.19
+go 1.20
 
 require golang.org/x/sync v0.1.0 // indirect
