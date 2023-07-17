@@ -176,8 +176,10 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 				//args.Command.K = state.Key(*startRange + 43 + int(id % 888))
 				args.Command.K = state.Key(int32(*startRange) + 43 + id)
 			}
+			log.Println("Here 179")
 		} else {
 			args.Command.K = state.Key(zipf.NextNumber())
+			log.Println("Here 182")
 		}
 
 		// Determine operation type
@@ -194,11 +196,14 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 		} else {
 			args.Command.Op = state.GET // read operation
 		}
+		log.Println("Here 199, type: ", args.Command.Op)
 
 		if *poissonAvg == -1 { // Poisson disabled
 			orInfo.sema.Acquire(context.Background(), 1)
+
 		} else {
 			for {
+				log.Println("Here 206")
 				if orInfo.sema.TryAcquire(1) {
 					if queuedReqs == 0 {
 						time.Sleep(poissonGenerator.NextArrival())
@@ -211,6 +216,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 				queuedReqs += 1
 			}
 		}
+		log.Println("Here 219")
 
 		before := time.Now()
 		writer.WriteByte(genericsmrproto.PROPOSE)
@@ -223,8 +229,8 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 		}
 		orInfo.startTimes[id] = before
 		orInfo.Unlock()
+		log.Println("Here 232")
 	}
-	log.Println("Here 224")
 }
 
 func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo, readings chan *response, leader int) {
