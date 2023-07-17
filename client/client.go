@@ -334,7 +334,6 @@ func printerMultipleFile(readings chan *response, numLeader int, experimentStart
 
 	latFileRead := make([]*os.File, numLeader)
 	latFileWrite := make([]*os.File, numLeader)
-	log.Println("Here 339")
 	for i := 0; i < numLeader; i++ {
 		fileName := fmt.Sprintf("latFileRead-%d.txt", i)
 		latFileRead[i], err = os.Create(fileName)
@@ -350,7 +349,6 @@ func printerMultipleFile(readings chan *response, numLeader int, experimentStart
 			log.Println("Error creating latency file", err)
 			return
 		}
-		log.Println("Here 355, i: ", i)
 	}
 
 	startTime := time.Now()
@@ -364,7 +362,6 @@ func printerMultipleFile(readings chan *response, numLeader int, experimentStart
 		endTime := time.Now() // Set to current time in case there are no readings
 		currentRuntime := time.Now().Sub(experimentStart)
 		for i := 0; i < count; i++ {
-			log.Println("Here 369, i: ", i)
 			resp := <-readings
 
 			// Log all to latency file if they are not within the ramp up or ramp down period.
