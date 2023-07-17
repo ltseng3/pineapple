@@ -171,7 +171,7 @@ func (r *Replica) bcastGet(instance int32, write bool, key int) {
 
 	replicaCount := r.N - 1
 	q := r.Id
-
+	log.Println("Broadcasting key: ", key)
 	// Send to each connected replica
 	for sentCount := 0; sentCount < replicaCount; sentCount++ {
 		q = (q + 1) % int32(r.N)
@@ -307,7 +307,7 @@ func (r *Replica) handleSet(set *pineappleproto.Set) {
 	if set.Payload.Tag.Timestamp > r.data[set.Key].Tag.Timestamp {
 		r.data[set.Key] = set.Payload
 	}
-	log.Println("Replying for: ", set.Key)
+
 	setReply = &pineappleproto.SetReply{Instance: set.Instance}
 
 	//r.sync()
