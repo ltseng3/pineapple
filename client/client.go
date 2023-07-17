@@ -380,7 +380,6 @@ func printerMultipleFile(readings chan *response, numLeader int, experimentStart
 			avgCommit = commitSum / float64(count)
 			tput = float64(count) / endTime.Sub(startTime).Seconds()
 		}
-		log.Println("Here 393, tput: ", tput)
 
 		totalOrs := 0
 		for i := 0; i < *T; i++ {
