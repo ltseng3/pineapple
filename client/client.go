@@ -141,8 +141,10 @@ func main() {
 	}
 	log.Println("Here 142")
 	if *singleClusterTest {
+		log.Println("Here 144")
 		printerMultipleFile(readings, len(rlReply.ReplicaList), experimentStart, rampDown, rampUp, timeout)
 	} else {
+		log.Println("Here 147")
 		printer(readings)
 	}
 }
