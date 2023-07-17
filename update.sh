@@ -4,7 +4,9 @@ git stash && git stash clear && git pull
 
 go build -o program
 
-if [ "$1" != "client" ]; then
+if [ "$1" = "client" ]; then
+  . test.sh
+else
   HOST=$(hostname | awk -F "." '{print $1}')
   echo "Hostname: $HOST"
 
