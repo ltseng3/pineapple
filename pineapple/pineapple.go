@@ -466,7 +466,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	key := int(propose.Command.K)
 	cmds[0] = propose.Command
 	proposals[0] = propose
-
+	log.Println("got key: ", key)
 	// ABD
 	r.instanceSpace[instNo] = &Instance{
 		cmds:   cmds,
