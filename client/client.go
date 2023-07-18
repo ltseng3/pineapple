@@ -175,7 +175,6 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 		} else {
 			args.Command.K = state.Key(zipf.NextNumber())
 		}
-		log.Println("writing key: ", args.Command.K)
 
 		// Determine operation type
 		randNumber := opRand.Float64()
@@ -210,7 +209,6 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 			}
 		}
 
-		log.Println("actually writing key: ", args.Command.K)
 		before := time.Now()
 		writer.WriteByte(genericsmrproto.PROPOSE)
 		args.Marshal(writer)
