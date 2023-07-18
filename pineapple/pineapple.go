@@ -250,7 +250,6 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 					r.data[key] = getReply.Payload
 				}
 			}
-			log.Println("getReply key: ", key)
 			r.instanceSpace[getReply.Instance].receivedData = nil // clear slice, no longer needed
 
 			write := false
@@ -473,7 +472,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	key := int(propose.Command.K)
 	cmds[0] = propose.Command
 	proposals[0] = propose
-
+	log.Println("REcevied key: ", key)
 	// ABD
 	r.instanceSpace[instNo] = &Instance{
 		cmds:   cmds,
