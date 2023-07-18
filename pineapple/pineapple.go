@@ -171,6 +171,7 @@ func (r *Replica) bcastGet(instance int32, write bool, key int) {
 
 	replicaCount := r.N - 1
 	q := r.Id
+	log.Println("get bcast key: ", key)
 	// Send to each connected replica
 	for sentCount := 0; sentCount < replicaCount; sentCount++ {
 		q = (q + 1) % int32(r.N)
@@ -467,7 +468,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	key := int(propose.Command.K)
 	cmds[0] = propose.Command
 	proposals[0] = propose
-	log.Println("got key: ", key, "; operation: ", propose.Command.Op)
+
 	// ABD
 	r.instanceSpace[instNo] = &Instance{
 		cmds:   cmds,
