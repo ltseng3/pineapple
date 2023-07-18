@@ -258,7 +258,6 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 			isRead,
 			leader,
 		}
-		log.Println("Here 263")
 	}
 }
 
@@ -289,7 +288,6 @@ func printer(readings chan *response) {
 			resp := <-readings
 			// Log all to latency file
 			latFile.WriteString(fmt.Sprintf("%d %f %f\n", resp.receivedAt.UnixNano(), resp.rtt, resp.commitLatency))
-			log.Print("Latency: ", resp.rtt, " commit latency: ", resp.commitLatency, " isRead: ", resp.isRead, "\n")
 			sum += resp.rtt
 			commitSum += resp.commitLatency
 			endTime = resp.receivedAt
@@ -390,6 +388,7 @@ func printerMultipleFile(readings chan *response, numLeader int, experimentStart
 		// Log all to latency file if they are not within the ramp up or ramp down period.
 		if *rampUp < int(currentRuntime.Seconds()) && int(currentRuntime.Seconds()) < *timeout-*rampDown {
 			lattputFile.WriteString(fmt.Sprintf("%d %f %f %d %d %f\n", endTime.UnixNano(), avg, tput, count, totalOrs, avgCommit))
+			log.Println("Writing to lattput")
 		}
 		startTime = endTime
 	}
