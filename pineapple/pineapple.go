@@ -14,7 +14,7 @@ import (
 )
 
 const CLOCK = 1000 * 10
-const CHAN_BUFFER_SIZE = 500000
+const CHAN_BUFFER_SIZE = 200000
 const TRUE = uint8(1)
 const FALSE = uint8(0)
 
