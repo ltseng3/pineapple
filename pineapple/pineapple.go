@@ -169,7 +169,7 @@ func (r *Replica) bcastGet(instance int32, write bool, key int) {
 		wr = TRUE
 	}
 	args := &pineappleproto.Get{ReplicaID: r.Id, Instance: instance, Write: wr, Key: key}
-
+	log.Println("bcastGet key: ", key)
 	replicaCount := r.N - 1
 	q := r.Id
 	// Send to each connected replica
@@ -284,7 +284,6 @@ func (r *Replica) bcastSet(instance int32, write bool, key int, payload pineappl
 	args := &pineappleproto.Set{ReplicaID: r.Id, Instance: instance, Write: wr,
 		Key: key, Payload: payload,
 	}
-	log.Println("Sending key: ", key)
 
 	replicaCount := r.N - 1
 	q := r.Id
