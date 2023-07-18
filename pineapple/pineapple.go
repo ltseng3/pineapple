@@ -79,7 +79,7 @@ type LeaderBookkeeping struct {
 	clientProposals []*genericsmr.Propose
 	maxRecvBallot   int32
 	getOKs          int
-	bcastSet        bool // has bcastSet already been called
+	getDone         bool // has get phase been completed
 	setOKs          int
 	nacks           int
 	completed       bool
@@ -229,7 +229,7 @@ func (r *Replica) handleGet(get *pineappleproto.Get) {
 // Chooses the most recent vt pair after waiting for majority ACKs (or increment timestamp if write)
 func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 	inst := r.instanceSpace[getReply.Instance]
-	if inst.lb.bcastSet { // avoid calling bcastSet more than once
+	if inst.lb.getDone { // avoid calling getDone more than once
 		return
 	}
 
@@ -242,13 +242,36 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 		inst.lb.getOKs++
 
 		if inst.lb.getOKs+1 > r.N>>1 {
+			identicalCount := 0 // keep track of the count of identical responses
+			firstResponse := r.instanceSpace[getReply.Instance].receivedData[0]
 			// Find the largest received timestamp
 			for _, data := range r.instanceSpace[getReply.Instance].receivedData {
 				if data.Tag.Timestamp > r.data[key].Tag.Timestamp {
 					r.data[key] = getReply.Payload
 				}
+				// tracks if all responses are identical by comparing each to the first
+				if data.Tag.Timestamp == firstResponse.Tag.Timestamp {
+					identicalCount++
+				}
 			}
 			r.instanceSpace[getReply.Instance].receivedData = nil // clear slice, no longer needed
+			inst.lb.getDone = true                                // getPhase completed
+
+			// Optimized read; don't proceed to set if the quorum all has the latest timestamp
+			if getReply.Write == 0 &&
+				identicalCount == len(r.instanceSpace[getReply.Instance].receivedData) {
+				// respond to client
+				if inst.lb.clientProposals != nil && r.Dreply && !inst.lb.completed {
+					propreply := &genericsmrproto.ProposeReplyTS{
+						OK:        TRUE,
+						CommandId: inst.lb.clientProposals[0].CommandId,
+						Value:     state.NIL,
+						Timestamp: inst.lb.clientProposals[0].Timestamp}
+					r.ReplyProposeTS(propreply, inst.lb.clientProposals[0].Reply)
+					inst.lb.completed = true
+				}
+				return
+			}
 
 			write := false
 			inst.status = PREPARED
@@ -261,7 +284,6 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			}
 			r.sync()
 			r.bcastSet(getReply.Instance, write, key, r.data[key])
-			inst.lb.bcastSet = true // bcastSet called
 		}
 	}
 }
@@ -475,7 +497,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 		cmds:   cmds,
 		ballot: r.makeUniqueBallot(0),
 		status: PREPARING,
-		lb:     &LeaderBookkeeping{clientProposals: proposals, bcastSet: false, completed: false},
+		lb:     &LeaderBookkeeping{clientProposals: proposals, getDone: false, completed: false},
 	}
 	r.data[key] = pineappleproto.Payload{
 		Tag:   pineappleproto.Tag{Timestamp: int(propose.Timestamp), ID: int(r.Id)},
