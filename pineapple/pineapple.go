@@ -171,7 +171,6 @@ func (r *Replica) bcastGet(instance int32, write bool, key int) {
 
 	replicaCount := r.N - 1
 	q := r.Id
-	log.Println("Broadcasting key: ", key)
 	// Send to each connected replica
 	for sentCount := 0; sentCount < replicaCount; sentCount++ {
 		q = (q + 1) % int32(r.N)
@@ -467,7 +466,6 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	key := int(propose.Command.K)
 	cmds[0] = propose.Command
 	proposals[0] = propose
-	log.Println("Got: ", key, "; value: ", propose.Command.V, " op: ", propose.Command.Op)
 
 	// ABD
 	r.instanceSpace[instNo] = &Instance{
@@ -487,10 +485,8 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 
 	// Construct the pineapple payload from proposal data
 	if propose.Command.Op == state.PUT { // write operation
-		log.Println("Will bcast 1 key: ", key)
 		r.bcastGet(instNo, true, key)
 	} else if propose.Command.Op == state.GET { // read operation
-		log.Println("Will bcast 2 key: ", key)
 		r.bcastGet(instNo, false, key)
 	}
 
@@ -519,7 +515,6 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 			r.bcastAccept(instNo, r.defaultBallot, cmds)
 		}
 	}
-	log.Println("Done with: ", key, ";  new val: ", r.data[key])
 }
 
 func (r *Replica) handlePrepare(prepare *pineappleproto.Prepare) {

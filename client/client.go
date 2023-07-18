@@ -161,7 +161,6 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 	queuedReqs := 0 // The number of poisson departures that have been missed
 
 	for id := int32(0); ; id++ {
-		//log.Println("Here 164, id: ", id)
 		args.CommandId = id
 
 		// Determine key
@@ -194,9 +193,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 		}
 
 		if *poissonAvg == -1 { // Poisson disabled
-			log.Println("Here 199 id: ", id)
 			orInfo.sema.Acquire(context.Background(), 1)
-			//log.Println("Here 201 id: ", id)
 		} else {
 			for {
 				if orInfo.sema.TryAcquire(1) {
@@ -223,7 +220,6 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 		}
 		orInfo.startTimes[id] = before
 		orInfo.Unlock()
-		log.Println("Here 232 id: ", id)
 	}
 }
 
@@ -262,8 +258,8 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 			isRead,
 			leader,
 		}
+		log.Println("Here 263")
 	}
-	log.Println("Here 264")
 }
 
 func printer(readings chan *response) {
@@ -394,7 +390,6 @@ func printerMultipleFile(readings chan *response, numLeader int, experimentStart
 		// Log all to latency file if they are not within the ramp up or ramp down period.
 		if *rampUp < int(currentRuntime.Seconds()) && int(currentRuntime.Seconds()) < *timeout-*rampDown {
 			lattputFile.WriteString(fmt.Sprintf("%d %f %f %d %d %f\n", endTime.UnixNano(), avg, tput, count, totalOrs, avgCommit))
-			log.Println("Here 407")
 		}
 		startTime = endTime
 	}
