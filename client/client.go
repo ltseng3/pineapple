@@ -178,6 +178,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 
 		// Determine operation type
 		randNumber := opRand.Float64()
+		log.Println(randNumber)
 		if *percentWrites+*percentRMWs > randNumber {
 			if *percentWrites > randNumber {
 				if !*blindWrites {
