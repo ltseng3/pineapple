@@ -495,32 +495,33 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	} else if propose.Command.Op == state.GET { // read operation
 		r.bcastGet(instNo, false, key)
 	}
+	/*
+		// Use Paxos if operation is not Read / Write
+		if propose.Command.Op != state.PUT || propose.Command.Op != state.GET {
+			if r.defaultBallot == -1 {
+				r.instanceSpace[instNo] = &Instance{
+					cmds:   cmds,
+					ballot: r.makeUniqueBallot(0),
+					status: PREPARING,
+					lb:     &LeaderBookkeeping{clientProposals: proposals, completed: false},
+				}
+				r.bcastPrepare(instNo, r.makeUniqueBallot(0), true)
+			} else {
+				r.instanceSpace[instNo] = &Instance{
+					cmds:   cmds,
+					ballot: r.defaultBallot,
+					status: PREPARED,
+					lb:     &LeaderBookkeeping{clientProposals: proposals, completed: false},
+				}
 
-	// Use Paxos if operation is not Read / Write
-	if propose.Command.Op != state.PUT || propose.Command.Op != state.GET {
-		if r.defaultBallot == -1 {
-			r.instanceSpace[instNo] = &Instance{
-				cmds:   cmds,
-				ballot: r.makeUniqueBallot(0),
-				status: PREPARING,
-				lb:     &LeaderBookkeeping{clientProposals: proposals, completed: false},
+				r.recordInstanceMetadata(r.instanceSpace[instNo])
+				r.recordCommands(cmds)
+				r.sync()
+
+				r.bcastAccept(instNo, r.defaultBallot, cmds)
 			}
-			r.bcastPrepare(instNo, r.makeUniqueBallot(0), true)
-		} else {
-			r.instanceSpace[instNo] = &Instance{
-				cmds:   cmds,
-				ballot: r.defaultBallot,
-				status: PREPARED,
-				lb:     &LeaderBookkeeping{clientProposals: proposals, completed: false},
-			}
-
-			r.recordInstanceMetadata(r.instanceSpace[instNo])
-			r.recordCommands(cmds)
-			r.sync()
-
-			r.bcastAccept(instNo, r.defaultBallot, cmds)
 		}
-	}
+	*/
 }
 
 func (r *Replica) handlePrepare(prepare *pineappleproto.Prepare) {
