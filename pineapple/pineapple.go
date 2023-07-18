@@ -174,6 +174,7 @@ func (r *Replica) bcastGet(instance int32, write bool, key int) {
 	q := r.Id
 	// Send to each connected replica
 	for sentCount := 0; sentCount < replicaCount; sentCount++ {
+		log.Println("Sending key: ", key)
 		q = (q + 1) % int32(r.N)
 		if q == r.Id {
 			break
@@ -471,7 +472,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	key := int(propose.Command.K)
 	cmds[0] = propose.Command
 	proposals[0] = propose
-	log.Println("REcevied key: ", key)
+
 	// ABD
 	r.instanceSpace[instNo] = &Instance{
 		cmds:   cmds,
