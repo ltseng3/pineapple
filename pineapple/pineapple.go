@@ -258,7 +258,6 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 				r.data[key] = pineappleproto.Payload{Tag: newTag, Value: r.data[key].Value}
 			}
 			r.sync()
-			log.Println("Sending key: ", key)
 			r.bcastSet(getReply.Instance, write, key, r.data[key])
 		}
 	}
@@ -280,6 +279,7 @@ func (r *Replica) bcastSet(instance int32, write bool, key int, payload pineappl
 	args := &pineappleproto.Set{ReplicaID: r.Id, Instance: instance, Write: wr,
 		Key: key, Payload: payload,
 	}
+	log.Println("Sending key: ", key)
 
 	replicaCount := r.N - 1
 	q := r.Id
@@ -467,7 +467,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	key := int(propose.Command.K)
 	cmds[0] = propose.Command
 	proposals[0] = propose
-	log.Println("got key: ", key)
+	log.Println("got key: ", key, "; operation: ", propose.Command.Op)
 	// ABD
 	r.instanceSpace[instNo] = &Instance{
 		cmds:   cmds,
