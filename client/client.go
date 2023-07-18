@@ -175,7 +175,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 		} else {
 			args.Command.K = state.Key(zipf.NextNumber())
 		}
-		//log.Println("writing key: ", args.Command.K)
+		log.Println("writing key: ", args.Command.K)
 
 		// Determine operation type
 		randNumber := opRand.Float64()
@@ -210,7 +210,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 			}
 		}
 
-		//log.Println("actually writing key: ", args.Command.K)
+		log.Println("actually writing key: ", args.Command.K)
 		before := time.Now()
 		writer.WriteByte(genericsmrproto.PROPOSE)
 		args.Marshal(writer)
@@ -390,7 +390,6 @@ func printerMultipleFile(readings chan *response, numLeader int, experimentStart
 		// Log all to latency file if they are not within the ramp up or ramp down period.
 		if *rampUp < int(currentRuntime.Seconds()) && int(currentRuntime.Seconds()) < *timeout-*rampDown {
 			lattputFile.WriteString(fmt.Sprintf("%d %f %f %d %d %f\n", endTime.UnixNano(), avg, tput, count, totalOrs, avgCommit))
-			log.Println("Writing to lattput")
 		}
 		startTime = endTime
 	}
