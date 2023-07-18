@@ -79,6 +79,7 @@ type LeaderBookkeeping struct {
 	clientProposals []*genericsmr.Propose
 	maxRecvBallot   int32
 	getOKs          int
+	bcastSet        bool // has bcastSet already been called
 	setOKs          int
 	nacks           int
 	completed       bool
@@ -230,8 +231,11 @@ func (r *Replica) handleGet(get *pineappleproto.Get) {
 // Chooses the most recent vt pair after waiting for majority ACKs (or increment timestamp if write)
 func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 	inst := r.instanceSpace[getReply.Instance]
+	if inst.lb.bcastSet { // avoid calling bcastSet more than once
+		return
+	}
+
 	key := getReply.Key
-	log.Println("getReply key: ", key)
 	r.instanceSpace[getReply.Instance].receivedData =
 		append(r.instanceSpace[getReply.Instance].receivedData, getReply.Payload)
 
@@ -246,7 +250,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 					r.data[key] = getReply.Payload
 				}
 			}
-
+			log.Println("getReply key: ", key)
 			r.instanceSpace[getReply.Instance].receivedData = nil // clear slice, no longer needed
 
 			write := false
@@ -260,6 +264,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			}
 			r.sync()
 			r.bcastSet(getReply.Instance, write, key, r.data[key])
+			inst.lb.bcastSet = true // bcastSet called
 		}
 	}
 }
@@ -474,7 +479,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 		cmds:   cmds,
 		ballot: r.makeUniqueBallot(0),
 		status: PREPARING,
-		lb:     &LeaderBookkeeping{clientProposals: proposals, completed: false},
+		lb:     &LeaderBookkeeping{clientProposals: proposals, bcastSet: false, completed: false},
 	}
 	r.data[key] = pineappleproto.Payload{
 		Tag:   pineappleproto.Tag{Timestamp: int(propose.Timestamp), ID: int(r.Id)},
