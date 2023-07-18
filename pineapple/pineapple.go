@@ -169,12 +169,10 @@ func (r *Replica) bcastGet(instance int32, write bool, key int) {
 		wr = TRUE
 	}
 	args := &pineappleproto.Get{ReplicaID: r.Id, Instance: instance, Write: wr, Key: key}
-	log.Println("bcastGet key: ", key)
 	replicaCount := r.N - 1
 	q := r.Id
 	// Send to each connected replica
 	for sentCount := 0; sentCount < replicaCount; sentCount++ {
-		log.Println("Sending key: ", key)
 		q = (q + 1) % int32(r.N)
 		if q == r.Id {
 			break
@@ -195,7 +193,6 @@ func (r *Replica) handleGet(get *pineappleproto.Get) {
 	ok := TRUE
 	data, doesExist := r.data[get.Key]
 
-	log.Println("got key: ", get.Key)
 	// If init or payload is empty, simply return empty payload
 	if r.instanceSpace[r.crtInstance] == nil || !doesExist { // TODO: Is this block needed?
 		getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok, Write: get.Write,
