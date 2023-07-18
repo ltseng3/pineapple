@@ -178,8 +178,9 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 		}
 
 		// Determine operation type
-		if *percentWrites+*percentRMWs > opRand.Float64() {
-			if *percentWrites > opRand.Float64() {
+		randNumber := opRand.Float64()
+		if *percentWrites+*percentRMWs > randNumber {
+			if *percentWrites > randNumber {
 				if !*blindWrites {
 					args.Command.Op = state.PUT // write operation
 				} else {
