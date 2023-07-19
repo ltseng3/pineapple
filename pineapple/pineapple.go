@@ -254,14 +254,13 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 					identicalCount++
 				}
 			}
+			receivedDataCount := len(r.instanceSpace[getReply.Instance].receivedData)
 			r.instanceSpace[getReply.Instance].receivedData = nil // clear slice, no longer needed
 			inst.lb.getDone = true                                // getPhase completed
 
-			log.Println(getReply.Write == 0 &&
-				identicalCount == len(r.instanceSpace[getReply.Instance].receivedData))
 			// Optimized read; don't proceed to set if the quorum all has the latest timestamp
 			if getReply.Write == 0 &&
-				identicalCount == len(r.instanceSpace[getReply.Instance].receivedData) {
+				identicalCount == receivedDataCount {
 				// respond to client
 				if inst.lb.clientProposals != nil && r.Dreply && !inst.lb.completed {
 					propreply := &genericsmrproto.ProposeReplyTS{
@@ -298,7 +297,7 @@ func (r *Replica) bcastSet(instance int32, write bool, key int, payload pineappl
 			log.Println("Prepare bcast failed:", err)
 		}
 	}()
-
+	log.Println(write, " setting")
 	wr := FALSE
 	if write {
 		wr = TRUE
