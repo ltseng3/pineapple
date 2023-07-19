@@ -252,6 +252,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 				// tracks if all responses are identical by comparing each to the first
 				if data.Tag.Timestamp == firstResponse.Tag.Timestamp {
 					identicalCount++
+					log.Println(identicalCount, len(r.instanceSpace[getReply.Instance].receivedData))
 				}
 			}
 			r.instanceSpace[getReply.Instance].receivedData = nil // clear slice, no longer needed
@@ -260,7 +261,6 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			// Optimized read; don't proceed to set if the quorum all has the latest timestamp
 			if getReply.Write == 0 &&
 				identicalCount == len(r.instanceSpace[getReply.Instance].receivedData) {
-				log.Println(" Optimized")
 				// respond to client
 				if inst.lb.clientProposals != nil && r.Dreply && !inst.lb.completed {
 					propreply := &genericsmrproto.ProposeReplyTS{
