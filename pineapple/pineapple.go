@@ -297,7 +297,7 @@ func (r *Replica) bcastSet(instance int32, write bool, key int, payload pineappl
 			log.Println("Prepare bcast failed:", err)
 		}
 	}()
-	log.Println(write, " setting")
+
 	wr := FALSE
 	if write {
 		wr = TRUE
