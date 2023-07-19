@@ -260,6 +260,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			// Optimized read; don't proceed to set if the quorum all has the latest timestamp
 			if getReply.Write == 0 &&
 				identicalCount == len(r.instanceSpace[getReply.Instance].receivedData) {
+				log.Println(" Optimized")
 				// respond to client
 				if inst.lb.clientProposals != nil && r.Dreply && !inst.lb.completed {
 					propreply := &genericsmrproto.ProposeReplyTS{
@@ -296,7 +297,7 @@ func (r *Replica) bcastSet(instance int32, write bool, key int, payload pineappl
 			log.Println("Prepare bcast failed:", err)
 		}
 	}()
-	log.Println(write, " Setting")
+
 	wr := FALSE
 	if write {
 		wr = TRUE
