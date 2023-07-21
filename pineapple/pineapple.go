@@ -140,6 +140,21 @@ func NewReplica(id int, peerAddrList []string, exec bool, dreply bool) *Replica 
 	return r
 }
 
+// Compare two tags, returning true if the received tag is larger.
+// A tag is larger than another if it has a higher timestamp.
+// If both tags have the same timestamp, the tag with the Paxos leader id is smaller
+func (r *Replica) isLargerTag(currentTag pineappleproto.Tag, receivedTag pineappleproto.Tag) bool {
+	if receivedTag.Timestamp > currentTag.Timestamp {
+		return true
+	} else if receivedTag.Timestamp == currentTag.Timestamp {
+		// if the replica is the leader and the tag has its id, prefer the receivedTag
+		if r.IsLeader && currentTag.ID == int(r.Id) {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *Replica) replyPrepare(replicaId int32, reply *pineappleproto.PrepareReply) {
 	r.SendMsg(replicaId, r.prepareReplyRPC, reply)
 }
@@ -246,7 +261,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			firstResponse := r.instanceSpace[getReply.Instance].receivedData[0]
 			// Find the largest received timestamp
 			for _, data := range r.instanceSpace[getReply.Instance].receivedData {
-				if data.Tag.Timestamp > r.data[key].Tag.Timestamp {
+				if r.isLargerTag(r.data[key].Tag, data.Tag) { // received value has larger tag
 					r.data[key] = getReply.Payload
 				}
 				// tracks if all responses are identical by comparing each to the first
@@ -328,8 +343,8 @@ func (r *Replica) bcastSet(instance int32, write bool, key int, payload pineappl
 func (r *Replica) handleSet(set *pineappleproto.Set) {
 	var setReply *pineappleproto.SetReply
 
-	// Sets received payload if latest timestamp seen
-	if set.Payload.Tag.Timestamp > r.data[set.Key].Tag.Timestamp {
+	// Sets received payload if largest tag seen
+	if r.isLargerTag(r.data[set.Key].Tag, set.Payload.Tag) {
 		r.data[set.Key] = set.Payload
 	}
 
