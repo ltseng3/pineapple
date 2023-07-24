@@ -405,6 +405,87 @@ func (r *Replica) bcastPrepare(instance int32, ballot int32, toInfinity bool) {
 	}
 }
 
+func (r *Replica) handlePrepare(prepare *pineappleproto.Prepare) {
+	inst := r.instanceSpace[prepare.Instance]
+	var preply *pineappleproto.PrepareReply
+
+	if inst == nil {
+		ok := TRUE
+		if r.defaultBallot > prepare.Ballot {
+			ok = FALSE
+		}
+		preply = &pineappleproto.PrepareReply{Instance: prepare.Instance, OK: ok,
+			Ballot: r.defaultBallot, Command: make([]state.Command, 0)}
+	} else {
+		ok := TRUE
+		if prepare.Ballot < inst.ballot {
+			ok = FALSE
+		}
+		preply = &pineappleproto.PrepareReply{Instance: prepare.Instance, OK: ok,
+			Ballot: inst.ballot, Command: inst.cmds}
+	}
+
+	r.replyPrepare(prepare.LeaderId, preply)
+
+	if prepare.ToInfinity == TRUE && prepare.Ballot > r.defaultBallot {
+		r.defaultBallot = prepare.Ballot
+	}
+}
+
+func (r *Replica) handlePrepareReply(preply *pineappleproto.PrepareReply) {
+	inst := r.instanceSpace[preply.Instance]
+
+	if inst.status != PREPARING {
+		// TODO: should replies for non-current ballots be ignored?
+		// we've moved on -- these are delayed replies, so just ignore
+		return
+	}
+
+	if preply.OK == TRUE {
+		inst.lb.getOKs++
+
+		if preply.Ballot > inst.lb.maxRecvBallot {
+			inst.cmds = preply.Command
+			inst.lb.maxRecvBallot = preply.Ballot
+			if inst.lb.clientProposals != nil {
+				// there is already a competing command for this instance,
+				// so we put the client proposal back in the queue so that
+				// we know to try it in another instance
+				for i := 0; i < len(inst.lb.clientProposals); i++ {
+					r.ProposeChan <- inst.lb.clientProposals[i]
+				}
+				inst.lb.clientProposals = nil
+			}
+		}
+
+		if inst.lb.getOKs+1 > r.N>>1 {
+			inst.status = PREPARED
+			inst.lb.nacks = 0
+			if inst.ballot > r.defaultBallot {
+				r.defaultBallot = inst.ballot
+			}
+			r.recordInstanceMetadata(r.instanceSpace[preply.Instance])
+			r.sync()
+			r.bcastAccept(preply.Instance, inst.ballot, inst.cmds)
+		}
+	} else {
+		// TODO: there is probably another active leader
+		inst.lb.nacks++
+		if preply.Ballot > inst.lb.maxRecvBallot {
+			inst.lb.maxRecvBallot = preply.Ballot
+		}
+		if inst.lb.nacks >= r.N>>1 {
+			if inst.lb.clientProposals != nil {
+				// try the proposals in another instance
+				for i := 0; i < len(inst.lb.clientProposals); i++ {
+					r.ProposeChan <- inst.lb.clientProposals[i]
+				}
+				inst.lb.clientProposals = nil
+			}
+		}
+	}
+}
+
 var pa pineappleproto.Accept
 
 func (r *Replica) bcastAccept(instance int32, ballot int32, command []state.Command) {
@@ -433,6 +514,99 @@ func (r *Replica) bcastAccept(instance int32, ballot int32, command []state.Comm
 		}
 		sent++
 		r.SendMsg(q, r.acceptRPC, args)
+	}
+}
+
+func (r *Replica) handleAccept(accept *pineappleproto.Accept) {
+	inst := r.instanceSpace[accept.Instance]
+	var areply *pineappleproto.AcceptReply
+
+	if inst == nil {
+		if accept.Ballot < r.defaultBallot {
+			areply = &pineappleproto.AcceptReply{Instance: accept.Instance, OK: FALSE, Ballot: r.defaultBallot}
+		} else {
+			r.instanceSpace[accept.Instance] = &Instance{
+				cmds:   accept.Command,
+				ballot: accept.Ballot,
+				status: ACCEPTED,
+				lb:     nil,
+			}
+			areply = &pineappleproto.AcceptReply{Instance: accept.Instance, OK: TRUE, Ballot: r.defaultBallot}
+		}
+	} else if inst.ballot > accept.Ballot {
+		areply = &pineappleproto.AcceptReply{Instance: accept.Instance, OK: FALSE, Ballot: inst.ballot}
+	} else if inst.ballot < accept.Ballot {
+		inst.cmds = accept.Command
+		inst.ballot = accept.Ballot
+		inst.status = ACCEPTED
+		areply = &pineappleproto.AcceptReply{Instance: accept.Instance, OK: TRUE, Ballot: inst.ballot}
+		if inst.lb != nil && inst.lb.clientProposals != nil {
+			//TODO: is this correct?
+			// try the proposal in a different instance
+			for i := 0; i < len(inst.lb.clientProposals); i++ {
+				r.ProposeChan <- inst.lb.clientProposals[i]
+			}
+			inst.lb.clientProposals = nil
+		}
+	} else {
+		// reordered ACCEPT
+		r.instanceSpace[accept.Instance].cmds = accept.Command
+		if r.instanceSpace[accept.Instance].status != COMMITTED {
+			r.instanceSpace[accept.Instance].status = ACCEPTED
+		}
+		areply = &pineappleproto.AcceptReply{Instance: accept.Instance, OK: TRUE, Ballot: r.defaultBallot}
+	}
+
+	if areply.OK == TRUE {
+		r.recordInstanceMetadata(r.instanceSpace[accept.Instance])
+		r.recordCommands(accept.Command)
+		r.sync()
+	}
+
+	r.replyAccept(accept.LeaderId, areply)
+}
+
+func (r *Replica) handleAcceptReply(areply *pineappleproto.AcceptReply) {
+	inst := r.instanceSpace[areply.Instance]
+
+	if inst.status != PREPARED && inst.status != ACCEPTED {
+		// we've move on, these are delayed replies, so just ignore
+		return
+	}
+
+	if areply.OK == TRUE {
+		inst.lb.setOKs++
+		if inst.lb.setOKs+1 > r.N>>1 {
+			inst = r.instanceSpace[areply.Instance]
+			inst.status = COMMITTED
+			if inst.lb.clientProposals != nil && !r.Dreply {
+				// give client the all clear
+				for i := 0; i < len(inst.cmds); i++ {
+					propreply := &genericsmrproto.ProposeReplyTS{
+						OK:        TRUE,
+						CommandId: inst.lb.clientProposals[i].CommandId,
+						Value:     state.NIL,
+						Timestamp: inst.lb.clientProposals[i].Timestamp}
+					r.ReplyProposeTS(propreply, inst.lb.clientProposals[i].Reply)
+				}
+			}
+
+			r.recordInstanceMetadata(r.instanceSpace[areply.Instance])
+			r.sync() //is this necessary?
+
+			r.updateCommittedUpTo()
+
+			r.bcastCommit(areply.Instance, inst.ballot, inst.cmds)
+		}
+	} else {
+		// TODO: there is probably another active leader
+		inst.lb.nacks++
+		if areply.Ballot > inst.lb.maxRecvBallot {
+			inst.lb.maxRecvBallot = areply.Ballot
+		}
+		if inst.lb.nacks >= r.N>>1 {
+			// TODO
+		}
 	}
 }
 
@@ -559,82 +733,6 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	*/
 }
 
-func (r *Replica) handlePrepare(prepare *pineappleproto.Prepare) {
-	inst := r.instanceSpace[prepare.Instance]
-	var preply *pineappleproto.PrepareReply
-
-	if inst == nil {
-		ok := TRUE
-		if r.defaultBallot > prepare.Ballot {
-			ok = FALSE
-		}
-		preply = &pineappleproto.PrepareReply{Instance: prepare.Instance, OK: ok,
-			Ballot: r.defaultBallot, Command: make([]state.Command, 0)}
-	} else {
-		ok := TRUE
-		if prepare.Ballot < inst.ballot {
-			ok = FALSE
-		}
-		preply = &pineappleproto.PrepareReply{Instance: prepare.Instance, OK: ok,
-			Ballot: inst.ballot, Command: inst.cmds}
-	}
-
-	r.replyPrepare(prepare.LeaderId, preply)
-
-	if prepare.ToInfinity == TRUE && prepare.Ballot > r.defaultBallot {
-		r.defaultBallot = prepare.Ballot
-	}
-}
-
-func (r *Replica) handleAccept(accept *pineappleproto.Accept) {
-	inst := r.instanceSpace[accept.Instance]
-	var areply *pineappleproto.AcceptReply
-
-	if inst == nil {
-		if accept.Ballot < r.defaultBallot {
-			areply = &pineappleproto.AcceptReply{Instance: accept.Instance, OK: FALSE, Ballot: r.defaultBallot}
-		} else {
-			r.instanceSpace[accept.Instance] = &Instance{
-				cmds:   accept.Command,
-				ballot: accept.Ballot,
-				status: ACCEPTED,
-				lb:     nil,
-			}
-			areply = &pineappleproto.AcceptReply{Instance: accept.Instance, OK: TRUE, Ballot: r.defaultBallot}
-		}
-	} else if inst.ballot > accept.Ballot {
-		areply = &pineappleproto.AcceptReply{Instance: accept.Instance, OK: FALSE, Ballot: inst.ballot}
-	} else if inst.ballot < accept.Ballot {
-		inst.cmds = accept.Command
-		inst.ballot = accept.Ballot
-		inst.status = ACCEPTED
-		areply = &pineappleproto.AcceptReply{Instance: accept.Instance, OK: TRUE, Ballot: inst.ballot}
-		if inst.lb != nil && inst.lb.clientProposals != nil {
-			//TODO: is this correct?
-			// try the proposal in a different instance
-			for i := 0; i < len(inst.lb.clientProposals); i++ {
-				r.ProposeChan <- inst.lb.clientProposals[i]
-			}
-			inst.lb.clientProposals = nil
-		}
-	} else {
-		// reordered ACCEPT
-		r.instanceSpace[accept.Instance].cmds = accept.Command
-		if r.instanceSpace[accept.Instance].status != COMMITTED {
-			r.instanceSpace[accept.Instance].status = ACCEPTED
-		}
-		areply = &pineappleproto.AcceptReply{Instance: accept.Instance, OK: TRUE, Ballot: r.defaultBallot}
-	}
-
-	if areply.OK == TRUE {
-		r.recordInstanceMetadata(r.instanceSpace[accept.Instance])
-		r.recordCommands(accept.Command)
-		r.sync()
-	}
-
-	r.replyAccept(accept.LeaderId, areply)
-}
-
 func (r *Replica) handleCommit(commit *pineappleproto.Commit) {
 	inst := r.instanceSpace[commit.Instance]
 
@@ -688,104 +786,6 @@ func (r *Replica) handleCommitShort(commit *pineappleproto.CommitShort) {
 	r.updateCommittedUpTo()
 
 	r.recordInstanceMetadata(r.instanceSpace[commit.Instance])
-}
-
-func (r *Replica) handlePrepareReply(preply *pineappleproto.PrepareReply) {
-	inst := r.instanceSpace[preply.Instance]
-
-	if inst.status != PREPARING {
-		// TODO: should replies for non-current ballots be ignored?
-		// we've moved on -- these are delayed replies, so just ignore
-		return
-	}
-
-	if preply.OK == TRUE {
-		inst.lb.getOKs++
-
-		if preply.Ballot > inst.lb.maxRecvBallot {
-			inst.cmds = preply.Command
-			inst.lb.maxRecvBallot = preply.Ballot
-			if inst.lb.clientProposals != nil {
-				// there is already a competing command for this instance,
-				// so we put the client proposal back in the queue so that
-				// we know to try it in another instance
-				for i := 0; i < len(inst.lb.clientProposals); i++ {
-					r.ProposeChan <- inst.lb.clientProposals[i]
-				}
-				inst.lb.clientProposals = nil
-			}
-		}
-
-		if inst.lb.getOKs+1 > r.N>>1 {
-			inst.status = PREPARED
-			inst.lb.nacks = 0
-			if inst.ballot > r.defaultBallot {
-				r.defaultBallot = inst.ballot
-			}
-			r.recordInstanceMetadata(r.instanceSpace[preply.Instance])
-			r.sync()
-			r.bcastAccept(preply.Instance, inst.ballot, inst.cmds)
-		}
-	} else {
-		// TODO: there is probably another active leader
-		inst.lb.nacks++
-		if preply.Ballot > inst.lb.maxRecvBallot {
-			inst.lb.maxRecvBallot = preply.Ballot
-		}
-		if inst.lb.nacks >= r.N>>1 {
-			if inst.lb.clientProposals != nil {
-				// try the proposals in another instance
-				for i := 0; i < len(inst.lb.clientProposals); i++ {
-					r.ProposeChan <- inst.lb.clientProposals[i]
-				}
-				inst.lb.clientProposals = nil
-			}
-		}
-	}
-}
-
-func (r *Replica) handleAcceptReply(areply *pineappleproto.AcceptReply) {
-	inst := r.instanceSpace[areply.Instance]
-
-	if inst.status != PREPARED && inst.status != ACCEPTED {
-		// we've move on, these are delayed replies, so just ignore
-		return
-	}
-
-	if areply.OK == TRUE {
-		inst.lb.setOKs++
-		if inst.lb.setOKs+1 > r.N>>1 {
-			inst = r.instanceSpace[areply.Instance]
-			inst.status = COMMITTED
-			if inst.lb.clientProposals != nil && !r.Dreply {
-				// give client the all clear
-				for i := 0; i < len(inst.cmds); i++ {
-					propreply := &genericsmrproto.ProposeReplyTS{
-						OK:        TRUE,
-						CommandId: inst.lb.clientProposals[i].CommandId,
-						Value:     state.NIL,
-						Timestamp: inst.lb.clientProposals[i].Timestamp}
-					r.ReplyProposeTS(propreply, inst.lb.clientProposals[i].Reply)
-				}
-			}
-
-			r.recordInstanceMetadata(r.instanceSpace[areply.Instance])
-			r.sync() //is this necessary?
-
-			r.updateCommittedUpTo()
-
-			r.bcastCommit(areply.Instance, inst.ballot, inst.cmds)
-		}
-	} else {
-		// TODO: there is probably another active leader
-		inst.lb.nacks++
-		if areply.Ballot > inst.lb.maxRecvBallot {
-			inst.lb.maxRecvBallot = areply.Ballot
-		}
-		if inst.lb.nacks >= r.N>>1 {
-			// TODO
-		}
-	}
 }
 
 func (r *Replica) executeCommands() {
@@ -930,20 +930,32 @@ func (r *Replica) Run() {
 			//got a Prepare message
 			r.handlePrepare(prepare)
 			break
-		case acceptS := <-r.acceptChan:
-			accept := acceptS.(*pineappleproto.Accept)
-			//got an Accept message
-			r.handleAccept(accept)
-			break
 		case prepareReplyS := <-r.prepareReplyChan:
 			prepareReply := prepareReplyS.(*pineappleproto.PrepareReply)
 			//got a Prepare reply
 			r.handlePrepareReply(prepareReply)
 			break
+		case acceptS := <-r.acceptChan:
+			accept := acceptS.(*pineappleproto.Accept)
+			//got an Accept message
+			r.handleAccept(accept)
+			break
 		case acceptReplyS := <-r.acceptReplyChan:
 			acceptReply := acceptReplyS.(*pineappleproto.AcceptReply)
 			//got an Accept reply
 			r.handleAcceptReply(acceptReply)
+			break
+		case commitS := <-r.commitChan:
+			commit := commitS.(*pineappleproto.Commit)
+			//got a Commit message
+			log.Printf("Received Commit from replica %d, for instance %d\n", commit.LeaderId, commit.Instance)
+			r.handleCommit(commit)
+			break
+		case commitS := <-r.commitShortChan:
+			commit := commitS.(*pineappleproto.CommitShort)
+			//got a Commit message
+			log.Printf("Received Commit from replica %d, for instance %d\n", commit.LeaderId, commit.Instance)
+			r.handleCommitShort(commit)
 			break
 		}
 	}
