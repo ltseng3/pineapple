@@ -43,15 +43,19 @@ type Replica struct {
 
 	// Paxos
 	prepareChan      chan fastrpc.Serializable
-	acceptChan       chan fastrpc.Serializable
 	prepareReplyChan chan fastrpc.Serializable
-	acceptReplyChan  chan fastrpc.Serializable
+	rmwGetChan       chan fastrpc.Serializable
+	rmwGetReplyChan  chan fastrpc.Serializable
+	rmwSetChan       chan fastrpc.Serializable
+	rmwSetReplyChan  chan fastrpc.Serializable
 	commitChan       chan fastrpc.Serializable
 	commitShortChan  chan fastrpc.Serializable
 	prepareRPC       uint8
-	acceptRPC        uint8
 	prepareReplyRPC  uint8
-	acceptReplyRPC   uint8
+	rmwGetRPC        uint8
+	rmwGetReplyRPC   uint8
+	rmwSetRPC        uint8
+	rmwSetReplyRPC   uint8
 	commitRPC        uint8
 	commitShortRPC   uint8
 
@@ -81,6 +85,9 @@ type LeaderBookkeeping struct {
 	getOKs          int
 	getDone         bool // has get phase been completed
 	setOKs          int
+	prepareOKs      int
+	rmwGetOKs       int
+	rmwSetOKs       int
 	nacks           int
 	completed       bool
 }
@@ -103,6 +110,10 @@ func NewReplica(id int, peerAddrList []string, exec bool, dreply bool) *Replica 
 		make(chan fastrpc.Serializable, CHAN_BUFFER_SIZE),
 		make(chan fastrpc.Serializable, CHAN_BUFFER_SIZE),
 		make(chan fastrpc.Serializable, CHAN_BUFFER_SIZE),
+		make(chan fastrpc.Serializable, CHAN_BUFFER_SIZE),
+		make(chan fastrpc.Serializable, CHAN_BUFFER_SIZE),
+		0,
+		0,
 		0,
 		0,
 		0,
@@ -129,9 +140,11 @@ func NewReplica(id int, peerAddrList []string, exec bool, dreply bool) *Replica 
 
 	// Paxos
 	r.prepareRPC = r.RegisterRPC(new(pineappleproto.Prepare), r.prepareChan)
-	r.acceptRPC = r.RegisterRPC(new(pineappleproto.Accept), r.acceptChan)
 	r.prepareReplyRPC = r.RegisterRPC(new(pineappleproto.PrepareReply), r.prepareReplyChan)
-	r.acceptReplyRPC = r.RegisterRPC(new(pineappleproto.AcceptReply), r.acceptReplyChan)
+	r.rmwGetRPC = r.RegisterRPC(new(pineappleproto.RMWGet), r.rmwGetChan)
+	r.rmwGetReplyRPC = r.RegisterRPC(new(pineappleproto.RMWGetReply), r.rmwGetReplyChan)
+	r.rmwSetRPC = r.RegisterRPC(new(pineappleproto.RMWSet), r.rmwSetChan)
+	r.rmwSetReplyRPC = r.RegisterRPC(new(pineappleproto.RMWSetReply), r.rmwSetReplyChan)
 	r.commitRPC = r.RegisterRPC(new(pineappleproto.Commit), r.commitChan)
 	r.commitShortRPC = r.RegisterRPC(new(pineappleproto.CommitShort), r.commitShortChan)
 
@@ -159,8 +172,12 @@ func (r *Replica) replyPrepare(replicaId int32, reply *pineappleproto.PrepareRep
 	r.SendMsg(replicaId, r.prepareReplyRPC, reply)
 }
 
-func (r *Replica) replyAccept(replicaId int32, reply *pineappleproto.AcceptReply) {
-	r.SendMsg(replicaId, r.acceptReplyRPC, reply)
+func (r *Replica) replyRMWGet(replicaId int32, reply *pineappleproto.RMWGetReply) {
+	r.SendMsg(replicaId, r.rmwGetReplyRPC, reply)
+}
+
+func (r *Replica) replyRMWSet(replicaId int32, reply *pineappleproto.RMWSetReply) {
+	r.SendMsg(replicaId, r.rmwSetReplyRPC, reply)
 }
 
 func (r *Replica) replyGet(replicaId int32, reply *pineappleproto.GetReply) {
@@ -248,7 +265,6 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 		return
 	}
 
-	key := getReply.Key
 	r.instanceSpace[getReply.Instance].receivedData =
 		append(r.instanceSpace[getReply.Instance].receivedData, getReply.Payload)
 
@@ -257,6 +273,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 		inst.lb.getOKs++
 
 		if inst.lb.getOKs+1 > r.N>>1 {
+			key := getReply.Key
 			identicalCount := 0 // keep track of the count of identical responses
 			firstResponse := r.instanceSpace[getReply.Instance].receivedData[0]
 			// Find the largest received timestamp
@@ -442,7 +459,7 @@ func (r *Replica) handlePrepareReply(preply *pineappleproto.PrepareReply) {
 	}
 
 	if preply.OK == TRUE {
-		inst.lb.getOKs++
+		inst.lb.prepareOKs++
 
 		if preply.Ballot > inst.lb.maxRecvBallot {
 			inst.cmds = preply.Command
@@ -458,7 +475,7 @@ func (r *Replica) handlePrepareReply(preply *pineappleproto.PrepareReply) {
 			}
 		}
 
-		if inst.lb.getOKs+1 > r.N>>1 {
+		if inst.lb.prepareOKs+1 > r.N>>1 {
 			inst.status = PREPARED
 			inst.lb.nacks = 0
 			if inst.ballot > r.defaultBallot {
@@ -466,7 +483,7 @@ func (r *Replica) handlePrepareReply(preply *pineappleproto.PrepareReply) {
 			}
 			r.recordInstanceMetadata(r.instanceSpace[preply.Instance])
 			r.sync()
-			r.bcastAccept(preply.Instance, inst.ballot, inst.cmds)
+			r.bcastRMWGet(preply.Instance, inst.ballot, inst.cmds)
 		}
 	} else {
 		// TODO: there is probably another active leader
@@ -486,20 +503,19 @@ func (r *Replica) handlePrepareReply(preply *pineappleproto.PrepareReply) {
 	}
 }
 
-var pa pineappleproto.Accept
+var pRMWGet pineappleproto.RMWGet
 
-func (r *Replica) bcastAccept(instance int32, ballot int32, command []state.Command) {
+func (r *Replica) bcastRMWGet(instance int32, ballot int32, command []state.Command) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Println("Accept bcast failed:", err)
 		}
 	}()
-	pa.LeaderId = r.Id
-	pa.Instance = instance
-	pa.Ballot = ballot
-	pa.Command = command
-	args := &pa
-	//args := &paxosproto.Accept{r.Id, instance, ballot, command}
+	pRMWGet.LeaderId = r.Id
+	pRMWGet.Instance = instance
+	pRMWGet.Ballot = ballot
+	pRMWGet.Command = command
+	args := &pRMWGet
 
 	n := r.N - 1
 	q := r.Id
@@ -513,33 +529,138 @@ func (r *Replica) bcastAccept(instance int32, ballot int32, command []state.Comm
 			continue
 		}
 		sent++
-		r.SendMsg(q, r.acceptRPC, args)
+		r.SendMsg(q, r.rmwGetRPC, args)
 	}
 }
 
-func (r *Replica) handleAccept(accept *pineappleproto.Accept) {
-	inst := r.instanceSpace[accept.Instance]
-	var areply *pineappleproto.AcceptReply
+func (r *Replica) handleRMWGet(rmwGet *pineappleproto.RMWGet) {
+	inst := r.instanceSpace[rmwGet.Instance]
+	key := int(rmwGet.Command[0].K)
+
+	var rmwGetReply *pineappleproto.RMWGetReply
 
 	if inst == nil {
-		if accept.Ballot < r.defaultBallot {
-			areply = &pineappleproto.AcceptReply{Instance: accept.Instance, OK: FALSE, Ballot: r.defaultBallot}
+		if rmwGet.Ballot < r.defaultBallot {
+			panic("outdated ballot received")
 		} else {
-			r.instanceSpace[accept.Instance] = &Instance{
-				cmds:   accept.Command,
-				ballot: accept.Ballot,
+			r.instanceSpace[rmwGet.Instance] = &Instance{
+				cmds:   rmwGet.Command,
+				ballot: rmwGet.Ballot,
 				status: ACCEPTED,
 				lb:     nil,
 			}
-			areply = &pineappleproto.AcceptReply{Instance: accept.Instance, OK: TRUE, Ballot: r.defaultBallot}
+			rmwGetReply = &pineappleproto.RMWGetReply{Instance: rmwGet.Instance, Ballot: r.defaultBallot, Key: key}
 		}
-	} else if inst.ballot > accept.Ballot {
-		areply = &pineappleproto.AcceptReply{Instance: accept.Instance, OK: FALSE, Ballot: inst.ballot}
-	} else if inst.ballot < accept.Ballot {
-		inst.cmds = accept.Command
-		inst.ballot = accept.Ballot
+	} else if inst.ballot > rmwGet.Ballot {
+		panic("outdated ballot received")
+	} else {
+		// reordered ACCEPT
+		r.instanceSpace[rmwGet.Instance].cmds = rmwGet.Command
+		if r.instanceSpace[rmwGet.Instance].status != COMMITTED {
+			r.instanceSpace[rmwGet.Instance].status = ACCEPTED
+		}
+		rmwGetReply = &pineappleproto.RMWGetReply{Instance: rmwGet.Instance, Ballot: r.defaultBallot, Key: key}
+	}
+
+	r.recordInstanceMetadata(r.instanceSpace[rmwGet.Instance])
+	r.recordCommands(rmwGet.Command)
+	r.sync()
+
+	r.replyRMWGet(rmwGet.LeaderId, rmwGetReply)
+}
+
+// Chooses the most recent vt pair after waiting for majority ACKs (or increment timestamp if write)
+func (r *Replica) handleRMWGetReply(rmwGetReply *pineappleproto.RMWGetReply) {
+	inst := r.instanceSpace[rmwGetReply.Instance]
+	if inst.lb.getDone { // avoid calling getDone more than once
+		return
+	}
+
+	r.instanceSpace[rmwGetReply.Instance].receivedData =
+		append(r.instanceSpace[rmwGetReply.Instance].receivedData, rmwGetReply.Payload)
+
+	inst.lb.getOKs++
+
+	if inst.lb.getOKs+1 > r.N>>1 { // quorom of messages received
+		key := rmwGetReply.Key
+
+		// Find the largest received timestamp
+		for _, data := range r.instanceSpace[rmwGetReply.Instance].receivedData {
+			if r.isLargerTag(r.data[key].Tag, data.Tag) { // received value has larger tag
+				r.data[key] = rmwGetReply.Payload
+			}
+		}
+
+		r.instanceSpace[rmwGetReply.Instance].receivedData = nil // clear slice, no longer needed
+		//inst.lb.getDone = true                                // getPhase completed
+
+		inst.lb.nacks = 0
+		// If writing, choose a higher unique timestamp (by adjoining replica ID with Timestamp++)
+		newTag := pineappleproto.Tag{Timestamp: r.data[key].Tag.Timestamp + 1, ID: int(r.Id)}
+		newValue := r.data[key].Value + 1 // TODO: update RMW modify
+		r.data[key] = pineappleproto.Payload{Tag: newTag, Value: newValue}
+
+		r.sync()
+		r.bcastRMWSet(rmwGetReply.Instance, rmwGetReply.Ballot)
+	}
+}
+
+var pRMWSet pineappleproto.RMWSet
+
+func (r *Replica) bcastRMWSet(instance int32, ballot int32) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("Accept bcast failed:", err)
+		}
+	}()
+	pRMWSet.LeaderId = r.Id
+	pRMWSet.Instance = instance
+	pRMWSet.Ballot = ballot
+	pRMWSet.Command = r.instanceSpace[instance].cmds
+	pRMWSet.Payload = r.data[int(pRMWSet.Command[0].K)]
+	args := &pRMWSet
+
+	n := r.N - 1
+	q := r.Id
+
+	for sent := 0; sent < n; {
+		q = (q + 1) % int32(r.N)
+		if q == r.Id {
+			break
+		}
+		if !r.Alive[q] {
+			continue
+		}
+		sent++
+		r.SendMsg(q, r.rmwSetRPC, args)
+	}
+}
+
+func (r *Replica) handleRMWSet(rmwSet *pineappleproto.RMWSet) {
+	inst := r.instanceSpace[rmwSet.Instance]
+	key := int(rmwSet.Command[0].K)
+
+	var rmwSetReply *pineappleproto.RMWSetReply
+
+	if inst == nil {
+		if rmwSet.Ballot < r.defaultBallot {
+			panic("outdated ballot received")
+		} else {
+			r.instanceSpace[rmwSet.Instance] = &Instance{
+				cmds:   rmwSet.Command,
+				ballot: rmwSet.Ballot,
+				status: ACCEPTED,
+				lb:     nil,
+			}
+			rmwSetReply = &pineappleproto.RMWSetReply{Instance: rmwSet.Instance, OK: TRUE, Ballot: r.defaultBallot}
+		}
+	} else if inst.ballot > rmwSet.Ballot {
+		panic("outdated ballot received")
+	} else if inst.ballot < rmwSet.Ballot {
+		inst.cmds = rmwSet.Command
+		inst.ballot = rmwSet.Ballot
 		inst.status = ACCEPTED
-		areply = &pineappleproto.AcceptReply{Instance: accept.Instance, OK: TRUE, Ballot: inst.ballot}
+		rmwSetReply = &pineappleproto.RMWSetReply{Instance: rmwSet.Instance, OK: TRUE, Ballot: r.defaultBallot}
 		if inst.lb != nil && inst.lb.clientProposals != nil {
 			//TODO: is this correct?
 			// try the proposal in a different instance
@@ -550,64 +671,40 @@ func (r *Replica) handleAccept(accept *pineappleproto.Accept) {
 		}
 	} else {
 		// reordered ACCEPT
-		r.instanceSpace[accept.Instance].cmds = accept.Command
-		if r.instanceSpace[accept.Instance].status != COMMITTED {
-			r.instanceSpace[accept.Instance].status = ACCEPTED
+		r.instanceSpace[rmwSet.Instance].cmds = rmwSet.Command
+		if r.instanceSpace[rmwSet.Instance].status != COMMITTED {
+			r.instanceSpace[rmwSet.Instance].status = ACCEPTED
 		}
-		areply = &pineappleproto.AcceptReply{Instance: accept.Instance, OK: TRUE, Ballot: r.defaultBallot}
+		rmwSetReply = &pineappleproto.RMWSetReply{Instance: rmwSet.Instance, OK: TRUE, Ballot: r.defaultBallot}
 	}
+	r.data[key] = rmwSet.Payload
 
-	if areply.OK == TRUE {
-		r.recordInstanceMetadata(r.instanceSpace[accept.Instance])
-		r.recordCommands(accept.Command)
-		r.sync()
-	}
+	r.recordInstanceMetadata(r.instanceSpace[rmwSet.Instance])
+	r.recordCommands(rmwSet.Command)
+	r.sync()
 
-	r.replyAccept(accept.LeaderId, areply)
+	r.replyRMWSet(rmwSet.LeaderId, rmwSetReply)
 }
 
-func (r *Replica) handleAcceptReply(areply *pineappleproto.AcceptReply) {
-	inst := r.instanceSpace[areply.Instance]
+// Response handler for Set request on nodes
+func (r *Replica) handleRMWSetReply(rmwSetReply *pineappleproto.RMWSetReply) {
+	inst := r.instanceSpace[rmwSetReply.Instance]
 
-	if inst.status != PREPARED && inst.status != ACCEPTED {
-		// we've move on, these are delayed replies, so just ignore
-		return
-	}
+	inst.lb.rmwSetOKs++
 
-	if areply.OK == TRUE {
-		inst.lb.setOKs++
-		if inst.lb.setOKs+1 > r.N>>1 {
-			inst = r.instanceSpace[areply.Instance]
-			inst.status = COMMITTED
-			if inst.lb.clientProposals != nil && !r.Dreply {
-				// give client the all clear
-				for i := 0; i < len(inst.cmds); i++ {
-					propreply := &genericsmrproto.ProposeReplyTS{
-						OK:        TRUE,
-						CommandId: inst.lb.clientProposals[i].CommandId,
-						Value:     state.NIL,
-						Timestamp: inst.lb.clientProposals[i].Timestamp}
-					r.ReplyProposeTS(propreply, inst.lb.clientProposals[i].Reply)
-				}
-			}
-
-			r.recordInstanceMetadata(r.instanceSpace[areply.Instance])
-			r.sync() //is this necessary?
-
-			r.updateCommittedUpTo()
-
-			r.bcastCommit(areply.Instance, inst.ballot, inst.cmds)
-		}
-	} else {
-		// TODO: there is probably another active leader
-		inst.lb.nacks++
-		if areply.Ballot > inst.lb.maxRecvBallot {
-			inst.lb.maxRecvBallot = areply.Ballot
-		}
-		if inst.lb.nacks >= r.N>>1 {
-			// TODO
+	// Wait for a majority of acknowledgements
+	if inst.lb.rmwSetOKs+1 > r.N>>1 {
+		if inst.lb.clientProposals != nil && r.Dreply && !inst.lb.completed {
+			propreply := &genericsmrproto.ProposeReplyTS{
+				OK:        TRUE,
+				CommandId: inst.lb.clientProposals[0].CommandId,
+				Value:     state.NIL,
+				Timestamp: inst.lb.clientProposals[0].Timestamp}
+			r.ReplyProposeTS(propreply, inst.lb.clientProposals[0].Reply)
+			inst.lb.completed = true
 		}
 	}
+
 }
 
 var pc pineappleproto.Commit
@@ -660,77 +757,6 @@ func (r *Replica) bcastCommit(instance int32, ballot int32, command []state.Comm
 			r.SendMsg(q, r.commitRPC, args)
 		}
 	}
-}
-
-func (r *Replica) handlePropose(propose *genericsmr.Propose) {
-	/*
-		if !r.IsLeader {
-			preply := &genericsmrproto.ProposeReplyTS{TRUE, -1, state.NIL, 0}
-			r.ReplyProposeTS(preply, propose.Reply)
-			return
-		}
-	*/
-	for r.instanceSpace[r.crtInstance] != nil {
-		r.crtInstance++
-	}
-
-	instNo := r.crtInstance
-
-	cmds := make([]state.Command, 1)
-	proposals := make([]*genericsmr.Propose, 1)
-	key := int(propose.Command.K)
-	cmds[0] = propose.Command
-	proposals[0] = propose
-
-	// ABD
-	r.instanceSpace[instNo] = &Instance{
-		cmds:   cmds,
-		ballot: r.makeUniqueBallot(0),
-		status: PREPARING,
-		lb:     &LeaderBookkeeping{clientProposals: proposals, getDone: false, completed: false},
-	}
-	r.data[key] = pineappleproto.Payload{
-		Tag:   pineappleproto.Tag{Timestamp: int(propose.Timestamp), ID: int(r.Id)},
-		Value: int(propose.Command.V),
-	}
-
-	r.recordInstanceMetadata(r.instanceSpace[instNo])
-	r.recordCommands(cmds)
-	r.sync()
-
-	// Construct the pineapple payload from proposal data
-	if propose.Command.Op == state.PUT { // write operation
-		r.bcastGet(instNo, true, key)
-	} else if propose.Command.Op == state.GET { // read operation
-		r.bcastGet(instNo, false, key)
-	}
-	/*
-		// Use Paxos if operation is not Read / Write
-		if propose.Command.Op != state.PUT || propose.Command.Op != state.GET {
-			if r.defaultBallot == -1 {
-				r.instanceSpace[instNo] = &Instance{
-					cmds:   cmds,
-					ballot: r.makeUniqueBallot(0),
-					status: PREPARING,
-					lb:     &LeaderBookkeeping{clientProposals: proposals, completed: false},
-				}
-				r.bcastPrepare(instNo, r.makeUniqueBallot(0), true)
-			} else {
-				r.instanceSpace[instNo] = &Instance{
-					cmds:   cmds,
-					ballot: r.defaultBallot,
-					status: PREPARED,
-					lb:     &LeaderBookkeeping{clientProposals: proposals, completed: false},
-				}
-
-				r.recordInstanceMetadata(r.instanceSpace[instNo])
-				r.recordCommands(cmds)
-				r.sync()
-
-				r.bcastAccept(instNo, r.defaultBallot, cmds)
-			}
-		}
-	*/
 }
 
 func (r *Replica) handleCommit(commit *pineappleproto.Commit) {
@@ -786,6 +812,75 @@ func (r *Replica) handleCommitShort(commit *pineappleproto.CommitShort) {
 	r.updateCommittedUpTo()
 
 	r.recordInstanceMetadata(r.instanceSpace[commit.Instance])
+}
+
+func (r *Replica) handlePropose(propose *genericsmr.Propose) {
+	/*
+		if !r.IsLeader {
+			preply := &genericsmrproto.ProposeReplyTS{TRUE, -1, state.NIL, 0}
+			r.ReplyProposeTS(preply, propose.Reply)
+			return
+		}
+	*/
+	for r.instanceSpace[r.crtInstance] != nil {
+		r.crtInstance++
+	}
+
+	instNo := r.crtInstance
+
+	cmds := make([]state.Command, 1)
+	proposals := make([]*genericsmr.Propose, 1)
+	key := int(propose.Command.K)
+	cmds[0] = propose.Command
+	proposals[0] = propose
+
+	// ABD
+	r.instanceSpace[instNo] = &Instance{
+		cmds:   cmds,
+		ballot: r.makeUniqueBallot(0),
+		status: PREPARING,
+		lb:     &LeaderBookkeeping{clientProposals: proposals, getDone: false, completed: false},
+	}
+	r.data[key] = pineappleproto.Payload{
+		Tag:   pineappleproto.Tag{Timestamp: int(propose.Timestamp), ID: int(r.Id)},
+		Value: int(propose.Command.V),
+	}
+
+	r.recordInstanceMetadata(r.instanceSpace[instNo])
+	r.recordCommands(cmds)
+	r.sync()
+
+	// Construct the pineapple payload from proposal data
+	if propose.Command.Op == state.PUT { // write operation
+		r.bcastGet(instNo, true, key)
+	} else if propose.Command.Op == state.GET { // read operation
+		r.bcastGet(instNo, false, key)
+	}
+	// Use Paxos if operation is not Read / Write
+	if propose.Command.Op != state.PUT || propose.Command.Op != state.GET {
+		if r.defaultBallot == -1 {
+			r.instanceSpace[instNo] = &Instance{
+				cmds:   cmds,
+				ballot: r.makeUniqueBallot(0),
+				status: PREPARING,
+				lb:     &LeaderBookkeeping{clientProposals: proposals, completed: false},
+			}
+			r.bcastPrepare(instNo, r.makeUniqueBallot(0), true)
+		} else {
+			r.instanceSpace[instNo] = &Instance{
+				cmds:   cmds,
+				ballot: r.defaultBallot,
+				status: PREPARED,
+				lb:     &LeaderBookkeeping{clientProposals: proposals, completed: false},
+			}
+
+			r.recordInstanceMetadata(r.instanceSpace[instNo])
+			r.recordCommands(cmds)
+			r.sync()
+
+			r.bcastRMWGet(instNo, r.defaultBallot, cmds)
+		}
+	}
 }
 
 func (r *Replica) executeCommands() {
@@ -935,15 +1030,25 @@ func (r *Replica) Run() {
 			//got a Prepare reply
 			r.handlePrepareReply(prepareReply)
 			break
-		case acceptS := <-r.acceptChan:
-			accept := acceptS.(*pineappleproto.Accept)
-			//got an Accept message
-			r.handleAccept(accept)
+		case rmwGetS := <-r.rmwGetChan:
+			rmwGet := rmwGetS.(*pineappleproto.RMWGet)
+			//got an RMWGet message
+			r.handleRMWGet(rmwGet)
 			break
-		case acceptReplyS := <-r.acceptReplyChan:
-			acceptReply := acceptReplyS.(*pineappleproto.AcceptReply)
+		case rmwGetReplyS := <-r.rmwGetReplyChan:
+			rmwGetReply := rmwGetReplyS.(*pineappleproto.RMWGetReply)
+			//got an RMWGet reply
+			r.handleRMWGetReply(rmwGetReply)
+			break
+		case rmwSetS := <-r.rmwSetChan:
+			rmwSet := rmwSetS.(*pineappleproto.RMWSet)
+			//got an Accept message
+			r.handleRMWSet(rmwSet)
+			break
+		case rmwSetReplyS := <-r.rmwSetReplyChan:
+			rmwSetReply := rmwSetReplyS.(*pineappleproto.RMWSetReply)
 			//got an Accept reply
-			r.handleAcceptReply(acceptReply)
+			r.handleRMWSetReply(rmwSetReply)
 			break
 		case commitS := <-r.commitChan:
 			commit := commitS.(*pineappleproto.Commit)

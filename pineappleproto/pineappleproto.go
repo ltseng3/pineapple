@@ -60,14 +60,29 @@ type PrepareReply struct {
 	Command  []state.Command
 }
 
-type Accept struct {
+type RMWGet struct {
 	LeaderId int32
 	Instance int32
 	Ballot   int32
 	Command  []state.Command
 }
 
-type AcceptReply struct {
+type RMWGetReply struct {
+	Instance int32
+	Ballot   int32
+	Key      int
+	Payload  Payload
+}
+
+type RMWSet struct {
+	LeaderId int32
+	Instance int32
+	Ballot   int32
+	Command  []state.Command
+	Payload  Payload
+}
+
+type RMWSetReply struct {
 	Instance int32
 	OK       uint8
 	Ballot   int32
