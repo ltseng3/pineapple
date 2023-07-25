@@ -559,7 +559,8 @@ func (r *Replica) handleRMWGet(rmwGet *pineappleproto.RMWGet) {
 		if r.instanceSpace[rmwGet.Instance].status != COMMITTED {
 			r.instanceSpace[rmwGet.Instance].status = ACCEPTED
 		}
-		rmwGetReply = &pineappleproto.RMWGetReply{Instance: rmwGet.Instance, Ballot: r.defaultBallot, Key: key}
+		data := r.data[key]
+		rmwGetReply = &pineappleproto.RMWGetReply{Instance: rmwGet.Instance, Ballot: r.defaultBallot, Key: key, Payload: data}
 	}
 
 	r.recordInstanceMetadata(r.instanceSpace[rmwGet.Instance])
