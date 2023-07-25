@@ -577,9 +577,9 @@ func (r *Replica) handleRMWGetReply(rmwGetReply *pineappleproto.RMWGetReply) {
 	r.instanceSpace[rmwGetReply.Instance].receivedData =
 		append(r.instanceSpace[rmwGetReply.Instance].receivedData, rmwGetReply.Payload)
 
-	inst.lb.getOKs++
+	inst.lb.rmwGetOKs++
 
-	if inst.lb.getOKs+1 > r.N>>1 { // quorom of messages received
+	if inst.lb.rmwGetOKs+1 > r.N>>1 { // quorom of messages received
 		key := rmwGetReply.Key
 
 		// Find the largest received timestamp
