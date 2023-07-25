@@ -83,11 +83,12 @@ type LeaderBookkeeping struct {
 	clientProposals []*genericsmr.Propose
 	maxRecvBallot   int32
 	getOKs          int
-	getDone         bool // has get phase been completed
 	setOKs          int
+	getDone         bool // has get phase been completed
 	prepareOKs      int
 	rmwGetOKs       int
 	rmwSetOKs       int
+	rmwGetDone      bool // has rmwGet phase been completed
 	nacks           int
 	completed       bool
 }
@@ -563,17 +564,13 @@ func (r *Replica) handleRMWGet(rmwGet *pineappleproto.RMWGet) {
 		rmwGetReply = &pineappleproto.RMWGetReply{Instance: rmwGet.Instance, Ballot: r.defaultBallot, Key: key, Payload: data}
 	}
 
-	r.recordInstanceMetadata(r.instanceSpace[rmwGet.Instance])
-	r.recordCommands(rmwGet.Command)
-	r.sync()
-
 	r.replyRMWGet(rmwGet.LeaderId, rmwGetReply)
 }
 
 // Chooses the most recent vt pair after waiting for majority ACKs (or increment timestamp if write)
 func (r *Replica) handleRMWGetReply(rmwGetReply *pineappleproto.RMWGetReply) {
 	inst := r.instanceSpace[rmwGetReply.Instance]
-	if inst.lb.getDone { // avoid calling getDone more than once
+	if inst.lb.rmwGetDone { // avoid calling handleRMWSet more than once
 		return
 	}
 
@@ -593,7 +590,7 @@ func (r *Replica) handleRMWGetReply(rmwGetReply *pineappleproto.RMWGetReply) {
 		}
 
 		r.instanceSpace[rmwGetReply.Instance].receivedData = nil // clear slice, no longer needed
-		//inst.lb.getDone = true                                // getPhase completed
+		inst.lb.rmwGetDone = true                                // rmwGet phase completed
 
 		inst.lb.nacks = 0
 		// If writing, choose a higher unique timestamp (by adjoining replica ID with Timestamp++)
