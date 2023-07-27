@@ -73,6 +73,7 @@ type Replica struct {
 
 type Instance struct {
 	cmds         []state.Command
+	receivedRMW  pineappleproto.Payload
 	receivedData []pineappleproto.Payload
 	ballot       int32
 	status       InstanceStatus
@@ -262,7 +263,7 @@ func (r *Replica) handleGet(get *pineappleproto.Get) {
 // Chooses the most recent vt pair after waiting for majority ACKs (or increment timestamp if write)
 func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 	inst := r.instanceSpace[getReply.Instance]
-	if inst.lb.getDone { // avoid calling getDone more than once
+	if inst.lb.getDone { // avoid proceeding to set phase several times
 		return
 	}
 
@@ -598,7 +599,10 @@ func (r *Replica) handleRMWGetReply(rmwGetReply *pineappleproto.RMWGetReply) {
 		newValue := r.data[key].Value + 1 // TODO: update RMW modify
 		r.data[key] = pineappleproto.Payload{Tag: newTag, Value: newValue}
 
+		r.recordInstanceMetadata(r.instanceSpace[rmwGetReply.Instance])
+		r.recordCommands(r.instanceSpace[rmwGetReply.Instance].cmds)
 		r.sync()
+
 		r.bcastRMWSet(rmwGetReply.Instance, rmwGetReply.Ballot)
 	}
 }
@@ -636,7 +640,6 @@ func (r *Replica) bcastRMWSet(instance int32, ballot int32) {
 
 func (r *Replica) handleRMWSet(rmwSet *pineappleproto.RMWSet) {
 	inst := r.instanceSpace[rmwSet.Instance]
-	key := int(rmwSet.Command[0].K)
 
 	var rmwSetReply *pineappleproto.RMWSetReply
 
@@ -659,14 +662,6 @@ func (r *Replica) handleRMWSet(rmwSet *pineappleproto.RMWSet) {
 		inst.ballot = rmwSet.Ballot
 		inst.status = ACCEPTED
 		rmwSetReply = &pineappleproto.RMWSetReply{Instance: rmwSet.Instance, OK: TRUE, Ballot: r.defaultBallot}
-		if inst.lb != nil && inst.lb.clientProposals != nil {
-			//TODO: is this correct?
-			// try the proposal in a different instance
-			for i := 0; i < len(inst.lb.clientProposals); i++ {
-				r.ProposeChan <- inst.lb.clientProposals[i]
-			}
-			inst.lb.clientProposals = nil
-		}
 	} else {
 		// reordered ACCEPT
 		r.instanceSpace[rmwSet.Instance].cmds = rmwSet.Command
@@ -675,11 +670,7 @@ func (r *Replica) handleRMWSet(rmwSet *pineappleproto.RMWSet) {
 		}
 		rmwSetReply = &pineappleproto.RMWSetReply{Instance: rmwSet.Instance, OK: TRUE, Ballot: r.defaultBallot}
 	}
-	r.data[key] = rmwSet.Payload
-
-	r.recordInstanceMetadata(r.instanceSpace[rmwSet.Instance])
-	r.recordCommands(rmwSet.Command)
-	r.sync()
+	inst.receivedRMW = rmwSet.Payload // store received object in instance space
 
 	r.replyRMWSet(rmwSet.LeaderId, rmwSetReply)
 }
@@ -780,7 +771,6 @@ func (r *Replica) handleCommit(commit *pineappleproto.Commit) {
 	}
 
 	r.updateCommittedUpTo()
-
 	r.recordInstanceMetadata(r.instanceSpace[commit.Instance])
 	r.recordCommands(commit.Command)
 }
@@ -839,44 +829,27 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 		status: PREPARING,
 		lb:     &LeaderBookkeeping{clientProposals: proposals, getDone: false, completed: false},
 	}
-	r.data[key] = pineappleproto.Payload{
-		Tag:   pineappleproto.Tag{Timestamp: int(propose.Timestamp), ID: int(r.Id)},
-		Value: int(propose.Command.V),
-	}
 
-	r.recordInstanceMetadata(r.instanceSpace[instNo])
-	r.recordCommands(cmds)
-	r.sync()
-
-	// Construct the pineapple payload from proposal data
-	if propose.Command.Op == state.PUT { // write operation
-		r.bcastGet(instNo, true, key)
-	} else if propose.Command.Op == state.GET { // read operation
-		r.bcastGet(instNo, false, key)
-	}
 	// Use Paxos if operation is not Read / Write
 	if propose.Command.Op != state.PUT || propose.Command.Op != state.GET {
-		if r.defaultBallot == -1 {
-			r.instanceSpace[instNo] = &Instance{
-				cmds:   cmds,
-				ballot: r.makeUniqueBallot(0),
-				status: PREPARING,
-				lb:     &LeaderBookkeeping{clientProposals: proposals, completed: false},
-			}
-			r.bcastPrepare(instNo, r.makeUniqueBallot(0), true)
-		} else {
-			r.instanceSpace[instNo] = &Instance{
-				cmds:   cmds,
-				ballot: r.defaultBallot,
-				status: PREPARED,
-				lb:     &LeaderBookkeeping{clientProposals: proposals, completed: false},
-			}
+		r.instanceSpace[instNo] = &Instance{
+			cmds:   cmds,
+			ballot: r.makeUniqueBallot(0),
+			status: PREPARING,
+			lb:     &LeaderBookkeeping{clientProposals: proposals, completed: false},
+		}
+		r.bcastRMWGet(instNo, r.makeUniqueBallot(0), cmds)
+	} else { // use ABD
+		r.data[key] = pineappleproto.Payload{
+			Tag:   pineappleproto.Tag{Timestamp: int(propose.Timestamp), ID: int(r.Id)},
+			Value: int(propose.Command.V),
+		}
 
-			r.recordInstanceMetadata(r.instanceSpace[instNo])
-			r.recordCommands(cmds)
-			r.sync()
-
-			r.bcastRMWGet(instNo, r.defaultBallot, cmds)
+		// Construct the pineapple payload from proposal data
+		if propose.Command.Op == state.PUT { // write operation
+			r.bcastGet(instNo, true, key)
+		} else if propose.Command.Op == state.GET { // read operation
+			r.bcastGet(instNo, false, key)
 		}
 	}
 }
@@ -890,14 +863,9 @@ func (r *Replica) executeCommands() {
 			if r.instanceSpace[i].cmds != nil {
 				inst := r.instanceSpace[i]
 				for j := 0; j < len(inst.cmds); j++ {
-					val := inst.cmds[j].Execute(r.State)
-					if r.Dreply && inst.lb != nil && inst.lb.clientProposals != nil {
-						propreply := &genericsmrproto.ProposeReplyTS{
-							OK:        TRUE,
-							CommandId: inst.lb.clientProposals[j].CommandId,
-							Value:     val,
-							Timestamp: inst.lb.clientProposals[j].Timestamp}
-						r.ReplyProposeTS(propreply, inst.lb.clientProposals[j].Reply)
+					key := int(inst.cmds[0].K)
+					if r.isLargerTag(r.data[key].Tag, inst.receivedRMW.Tag) {
+						r.data[key] = inst.receivedRMW
 					}
 				}
 				i++
