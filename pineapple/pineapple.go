@@ -793,6 +793,7 @@ func (r *Replica) handleCommitShort(commit *pineappleproto.CommitShort) {
 		r.instanceSpace[commit.Instance].ballot = commit.Ballot
 		if inst.lb != nil && inst.lb.clientProposals != nil {
 			for i := 0; i < len(inst.lb.clientProposals); i++ {
+				log.Println("here 3")
 				r.ProposeChan <- inst.lb.clientProposals[i]
 			}
 			inst.lb.clientProposals = nil
