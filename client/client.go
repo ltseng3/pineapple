@@ -63,6 +63,10 @@ type outstandingRequestInfo struct {
 // An outstandingRequestInfo per client thread
 var orInfos []*outstandingRequestInfo
 
+// the percent of each operation actually performed by this specific client
+var pActualWrites float64
+var pActualRMW float64
+
 func main() {
 	flag.Parse()
 
@@ -105,6 +109,15 @@ func main() {
 		leader = *forceLeader
 	}
 
+	// set correct percentages based on client's connection
+	if leader == 0 { // connected to coordinator/leader node
+		pActualWrites = (*percentWrites * 3) - 1
+		pActualRMW = *percentRMWs * 3
+	} else { // connected to replica
+		pActualWrites = .5
+		pActualRMW = 0
+	}
+
 	readings := make(chan *response, 100000)
 
 	//startTime := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -114,7 +127,7 @@ func main() {
 
 		// automatically allocate clients equally
 		if *singleClusterTest {
-			leader = i % 2 //len(rlReply.ReplicaList); // only message nodes 0, 1
+			leader = len(rlReply.ReplicaList)
 		}
 
 		server, err := net.Dial("tcp", rlReply.ReplicaList[leader])
@@ -178,14 +191,14 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 
 		// Determine operation type
 		randNumber := opRand.Float64()
-		if *percentWrites+*percentRMWs > randNumber {
-			if *percentWrites > randNumber {
+		if pActualWrites+pActualRMW > randNumber {
+			if pActualWrites > randNumber {
 				if !*blindWrites {
 					args.Command.Op = state.PUT // write operation
 				} else {
 					//args.Command.Op = state.PUT_BLIND
 				}
-			} else if *percentRMWs > 0 {
+			} else if pActualRMW > 0 {
 				args.Command.Op = state.RMW // RMW operation
 			}
 		} else {
