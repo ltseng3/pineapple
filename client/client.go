@@ -63,10 +63,6 @@ type outstandingRequestInfo struct {
 // An outstandingRequestInfo per client thread
 var orInfos []*outstandingRequestInfo
 
-// the percent of each operation actually performed by this specific client
-var pActualWrites float64
-var pActualRMW float64
-
 func main() {
 	flag.Parse()
 
@@ -136,12 +132,14 @@ func main() {
 			make(map[int32]time.Time, *outstandingReqs),
 			make(map[int32]bool, *outstandingReqs)}
 
+		// the percent of each operation actually performed by this specific client
+		var pActualWrites float64
+		var pActualRMW float64
 		// set correct percentages based on client's connection
 		if leader == 0 { // connected to coordinator/leader node
 			pActualWrites = (*percentWrites * 3) - 1
 			pActualRMW = *percentRMWs * 3
 		} else { // connected to replica
-			log.Println("CALLING THIS")
 			pActualWrites = .5
 			pActualRMW = 0
 		}
@@ -149,7 +147,7 @@ func main() {
 		log.Println("This leader: ", leader, pActualRMW, pActualWrites)
 		//waitTime := startTime.Intn(3)
 		//time.Sleep(time.Duration(waitTime) * 100 * 1e6)
-		go simulatedClientWriter(leader, writer, orInfo)
+		go simulatedClientWriter(writer, orInfo, pActualRMW, pActualWrites)
 		go simulatedClientReader(reader, orInfo, readings, leader)
 
 		orInfos[i] = orInfo
@@ -161,7 +159,7 @@ func main() {
 	}
 }
 
-func simulatedClientWriter(leader int, writer *bufio.Writer, orInfo *outstandingRequestInfo) {
+func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo, pActualWrites float64, pActualRMW float64) {
 	args := genericsmrproto.Propose{
 		CommandId: 0,
 		Command:   state.Command{Op: state.PUT, K: 0, V: 1},
@@ -194,7 +192,7 @@ func simulatedClientWriter(leader int, writer *bufio.Writer, orInfo *outstanding
 		// Determine operation type
 		randNumber := opRand.Float64()
 		if pActualWrites+pActualRMW > randNumber {
-			log.Println(leader, randNumber, pActualWrites, pActualRMW)
+			log.Println(randNumber, pActualWrites, pActualRMW)
 			if pActualWrites > randNumber {
 				if !*blindWrites {
 					args.Command.Op = state.PUT // write operation
