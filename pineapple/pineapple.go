@@ -827,7 +827,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	// ABD
 	r.instanceSpace[instNo] = &Instance{
 		cmds:   cmds,
-		ballot: r.makeUniqueBallot(0),
+		ballot: 0,
 		status: PREPARING,
 		lb:     &LeaderBookkeeping{clientProposals: proposals, getDone: false, completed: false},
 	}
