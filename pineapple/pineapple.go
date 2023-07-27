@@ -824,8 +824,6 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	cmds[0] = propose.Command
 	proposals[0] = propose
 
-	log.Println("Got msg ", propose.Command.Op)
-
 	// ABD
 	r.instanceSpace[instNo] = &Instance{
 		cmds:   cmds,
@@ -838,11 +836,11 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	if propose.Command.Op != state.PUT && propose.Command.Op != state.GET {
 		r.instanceSpace[instNo] = &Instance{
 			cmds:   cmds,
-			ballot: r.makeUniqueBallot(0),
+			ballot: 0,
 			status: PREPARING,
 			lb:     &LeaderBookkeeping{clientProposals: proposals, completed: false},
 		}
-		r.bcastRMWGet(instNo, r.makeUniqueBallot(0), cmds)
+		r.bcastRMWGet(instNo, 0, cmds)
 	} else { // use ABD
 		r.data[key] = pineappleproto.Payload{
 			Tag:   pineappleproto.Tag{Timestamp: int(propose.Timestamp), ID: int(r.Id)},
