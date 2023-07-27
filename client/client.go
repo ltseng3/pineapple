@@ -140,7 +140,6 @@ func main() {
 		if leader == 0 { // connected to coordinator/leader node
 			pActualWrites = (*percentWrites * 3) - 1
 			pActualRMW = *percentRMWs * 3
-			log.Println("rmw, writes: ", pActualRMW, pActualWrites)
 		} else { // connected to replica
 			pActualWrites = .5
 			pActualRMW = 0
@@ -191,6 +190,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 
 		// Determine operation type
 		randNumber := opRand.Float64()
+		log.Println(randNumber)
 		if pActualWrites+pActualRMW > randNumber {
 			if pActualWrites > randNumber {
 				if !*blindWrites {
@@ -200,7 +200,6 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 				}
 			} else if pActualRMW > 0 {
 				args.Command.Op = state.RMW // RMW operation
-				log.Println("Sending rmw")
 			}
 		} else {
 			args.Command.Op = state.GET // read operation
