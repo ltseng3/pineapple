@@ -198,7 +198,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 					//args.Command.Op = state.PUT_BLIND
 				}
 			} else if pActualRMW > 0 {
-				log.Println(pActualWrites, randNumber)
+				log.Println(randNumber)
 				args.Command.Op = state.RMW // RMW operation
 			}
 		} else {
