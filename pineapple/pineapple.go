@@ -553,7 +553,7 @@ func (r *Replica) handleRMWGet(rmwGet *pineappleproto.RMWGet) {
 			}
 			rmwGetReply = &pineappleproto.RMWGetReply{Instance: rmwGet.Instance, Ballot: r.defaultBallot, Key: key}
 		}
-	} else if inst.ballot > rmwGet.Ballot {
+	} else if rmwGet.Ballot < inst.ballot {
 		log.Println(rmwGet.Ballot, inst.ballot)
 		panic("outdated ballot received")
 	} else {
@@ -824,7 +824,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	cmds[0] = propose.Command
 	proposals[0] = propose
 
-	log.Println("Got msg")
+	log.Println("Got msg ", propose.Command.Op)
 
 	// ABD
 	r.instanceSpace[instNo] = &Instance{
