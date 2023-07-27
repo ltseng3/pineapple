@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"io"
 	"pineapple/fastrpc"
+	"pineapple/state"
 	"sync"
 )
 
