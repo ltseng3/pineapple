@@ -521,7 +521,7 @@ func (r *Replica) bcastRMWGet(instance int32, ballot int32, command []state.Comm
 
 	n := r.N - 1
 	q := r.Id
-
+	log.Println("doing rmw")
 	for sent := 0; sent < n; {
 		q = (q + 1) % int32(r.N)
 		if q == r.Id {
