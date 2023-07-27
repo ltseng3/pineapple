@@ -145,7 +145,7 @@ func main() {
 		}
 		//waitTime := startTime.Intn(3)
 		//time.Sleep(time.Duration(waitTime) * 100 * 1e6)
-		go simulatedClientWriter(leader, writer, orInfo, pActualRMW, pActualWrites)
+		go simulatedClientWriter(leader, writer, orInfo, pActualWrites, pActualRMW)
 		go simulatedClientReader(reader, orInfo, readings, leader)
 
 		orInfos[i] = orInfo
