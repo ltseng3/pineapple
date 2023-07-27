@@ -157,7 +157,7 @@ func main() {
 	}
 }
 
-func simulatedClientWriter(leader, writer *bufio.Writer, orInfo *outstandingRequestInfo, pActualWrites float64, pActualRMW float64) {
+func simulatedClientWriter(leader int, writer *bufio.Writer, orInfo *outstandingRequestInfo, pActualWrites float64, pActualRMW float64) {
 	args := genericsmrproto.Propose{
 		CommandId: 0,
 		Command:   state.Command{Op: state.PUT, K: 0, V: 1},
