@@ -688,9 +688,9 @@ func (r *Replica) handleRMWSetReply(rmwSetReply *pineappleproto.RMWSetReply) {
 				CommandId: inst.lb.clientProposals[0].CommandId,
 				Value:     state.NIL,
 				Timestamp: inst.lb.clientProposals[0].Timestamp}
+			inst.lb.completed = true
 			r.ReplyProposeTS(propreply, inst.lb.clientProposals[0].Reply)
 			r.bcastCommit(rmwSetReply.Instance, rmwSetReply.Ballot, inst.cmds)
-			inst.lb.completed = true
 		}
 	}
 
