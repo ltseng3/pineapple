@@ -109,15 +109,6 @@ func main() {
 		leader = *forceLeader
 	}
 
-	// set correct percentages based on client's connection
-	if leader == 0 { // connected to coordinator/leader node
-		pActualWrites = (*percentWrites * 3) - 1
-		pActualRMW = *percentRMWs * 3
-	} else { // connected to replica
-		pActualWrites = .5
-		pActualRMW = 0
-	}
-
 	readings := make(chan *response, 100000)
 
 	//startTime := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -144,6 +135,15 @@ func main() {
 			semaphore.NewWeighted(*outstandingReqs),
 			make(map[int32]time.Time, *outstandingReqs),
 			make(map[int32]bool, *outstandingReqs)}
+
+		// set correct percentages based on client's connection
+		if leader == 0 { // connected to coordinator/leader node
+			pActualWrites = (*percentWrites * 3) - 1
+			pActualRMW = *percentRMWs * 3
+		} else { // connected to replica
+			pActualWrites = .5
+			pActualRMW = 0
+		}
 
 		//waitTime := startTime.Intn(3)
 		//time.Sleep(time.Duration(waitTime) * 100 * 1e6)
