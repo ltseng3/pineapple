@@ -145,7 +145,7 @@ func main() {
 		}
 		//waitTime := startTime.Intn(3)
 		//time.Sleep(time.Duration(waitTime) * 100 * 1e6)
-		go simulatedClientWriter(writer, orInfo, pActualRMW, pActualWrites)
+		go simulatedClientWriter(leader, writer, orInfo, pActualRMW, pActualWrites)
 		go simulatedClientReader(reader, orInfo, readings, leader)
 
 		orInfos[i] = orInfo
@@ -157,7 +157,7 @@ func main() {
 	}
 }
 
-func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo, pActualWrites float64, pActualRMW float64) {
+func simulatedClientWriter(leader, writer *bufio.Writer, orInfo *outstandingRequestInfo, pActualWrites float64, pActualRMW float64) {
 	args := genericsmrproto.Propose{
 		CommandId: 0,
 		Command:   state.Command{Op: state.PUT, K: 0, V: 1},
@@ -197,7 +197,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo,
 					//args.Command.Op = state.PUT_BLIND
 				}
 			} else if pActualRMW > 0 {
-				log.Println(randNumber)
+				log.Println("This: ", leader, pActualRMW)
 				args.Command.Op = state.RMW // RMW operation
 			}
 		} else {
