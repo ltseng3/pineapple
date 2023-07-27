@@ -140,7 +140,7 @@ func main() {
 		if leader == 0 { // connected to coordinator/leader node
 			pActualWrites = (*percentWrites * 3) - 1
 			pActualRMW = *percentRMWs * 3
-			log.Println(pActualRMW)
+			log.Println("rmw, writes: ", pActualRMW, pActualWrites)
 		} else { // connected to replica
 			pActualWrites = .5
 			pActualRMW = 0
