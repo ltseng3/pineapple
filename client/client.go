@@ -223,6 +223,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 				queuedReqs += 1
 			}
 		}
+		time.Sleep(3 * time.Second)
 
 		before := time.Now()
 		writer.WriteByte(genericsmrproto.PROPOSE)
