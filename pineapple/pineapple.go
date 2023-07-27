@@ -822,6 +822,8 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	cmds[0] = propose.Command
 	proposals[0] = propose
 
+	log.Println("Got msg")
+
 	// ABD
 	r.instanceSpace[instNo] = &Instance{
 		cmds:   cmds,
@@ -832,7 +834,6 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 
 	// Use Paxos if operation is not Read / Write
 	if propose.Command.Op != state.PUT && propose.Command.Op != state.GET {
-		log.Println("got ", propose.Command.Op)
 		r.instanceSpace[instNo] = &Instance{
 			cmds:   cmds,
 			ballot: r.makeUniqueBallot(0),
