@@ -759,6 +759,7 @@ func (r *Replica) handleCommit(commit *pineappleproto.Commit) {
 			lb:     nil,
 		}
 	} else {
+		log.Println("here 1")
 		r.instanceSpace[commit.Instance].cmds = commit.Command
 		r.instanceSpace[commit.Instance].status = COMMITTED
 		r.instanceSpace[commit.Instance].ballot = commit.Ballot
@@ -787,6 +788,7 @@ func (r *Replica) handleCommitShort(commit *pineappleproto.CommitShort) {
 			lb:           nil,
 		}
 	} else {
+		log.Println("here 2")
 		r.instanceSpace[commit.Instance].status = COMMITTED
 		r.instanceSpace[commit.Instance].ballot = commit.Ballot
 		if inst.lb != nil && inst.lb.clientProposals != nil {
