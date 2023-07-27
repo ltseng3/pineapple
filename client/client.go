@@ -144,6 +144,7 @@ func main() {
 			pActualWrites = .5
 			pActualRMW = 0
 		}
+		log.Println("This leader: ", leader, pActualRMW, pActualWrites)
 		//waitTime := startTime.Intn(3)
 		//time.Sleep(time.Duration(waitTime) * 100 * 1e6)
 		go simulatedClientWriter(leader, writer, orInfo)
