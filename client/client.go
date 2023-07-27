@@ -199,6 +199,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 				}
 			} else if pActualRMW > 0 {
 				args.Command.Op = state.RMW // RMW operation
+				log.Println("Sending rmw")
 			}
 		} else {
 			args.Command.Op = state.GET // read operation
