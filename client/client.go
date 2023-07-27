@@ -144,7 +144,6 @@ func main() {
 			pActualWrites = .5
 			pActualRMW = 0
 		}
-		log.Println(leader, pActualRMW)
 		//waitTime := startTime.Intn(3)
 		//time.Sleep(time.Duration(waitTime) * 100 * 1e6)
 		go simulatedClientWriter(writer, orInfo)
@@ -173,7 +172,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 
 	queuedReqs := 0 // The number of poisson departures that have been missed
 
-	for id := int32(0); ; id++ {
+	for id := int32(0); id < 2; id++ {
 		args.CommandId = id
 
 		// Determine key
@@ -199,6 +198,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 					//args.Command.Op = state.PUT_BLIND
 				}
 			} else if pActualRMW > 0 {
+				log.Println(pActualRMW)
 				args.Command.Op = state.RMW // RMW operation
 			}
 		} else {
