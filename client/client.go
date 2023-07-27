@@ -142,7 +142,7 @@ func main() {
 			pActualRMW = *percentRMWs * 3
 		} else { // connected to replica
 			pActualWrites = .5
-			pActualRMW = 0
+			pActualRMW = .1
 		}
 		log.Println("This leader: ", leader, pActualRMW, pActualWrites)
 		//waitTime := startTime.Intn(3)
