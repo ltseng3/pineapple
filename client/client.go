@@ -143,8 +143,6 @@ func main() {
 			pActualWrites = .5
 			pActualRMW = 0
 		}
-
-		log.Println("This leader: ", leader, pActualRMW, pActualWrites)
 		//waitTime := startTime.Intn(3)
 		//time.Sleep(time.Duration(waitTime) * 100 * 1e6)
 		go simulatedClientWriter(writer, orInfo, pActualRMW, pActualWrites)
@@ -192,7 +190,6 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo,
 		// Determine operation type
 		randNumber := opRand.Float64()
 		if pActualWrites+pActualRMW > randNumber {
-			log.Println(randNumber, pActualWrites, pActualRMW)
 			if pActualWrites > randNumber {
 				if !*blindWrites {
 					args.Command.Op = state.PUT // write operation
