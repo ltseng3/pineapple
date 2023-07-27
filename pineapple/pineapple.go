@@ -542,7 +542,8 @@ func (r *Replica) handleRMWGet(rmwGet *pineappleproto.RMWGet) {
 
 	if inst == nil {
 		if rmwGet.Ballot < r.defaultBallot {
-			panic("outdated ballot received")
+			log.Println(rmwGet.Ballot, r.defaultBallot)
+			panic("outdated ballot received during rmwGet")
 		} else {
 			r.instanceSpace[rmwGet.Instance] = &Instance{
 				cmds:   rmwGet.Command,
@@ -553,6 +554,7 @@ func (r *Replica) handleRMWGet(rmwGet *pineappleproto.RMWGet) {
 			rmwGetReply = &pineappleproto.RMWGetReply{Instance: rmwGet.Instance, Ballot: r.defaultBallot, Key: key}
 		}
 	} else if inst.ballot > rmwGet.Ballot {
+		log.Println(rmwGet.Ballot, r.defaultBallot)
 		panic("outdated ballot received")
 	} else {
 		// reordered ACCEPT
