@@ -172,7 +172,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 
 	queuedReqs := 0 // The number of poisson departures that have been missed
 
-	for id := int32(0); id < 2; id++ {
+	for id := int32(0); ; id++ {
 		args.CommandId = id
 
 		// Determine key
@@ -190,7 +190,6 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo)
 
 		// Determine operation type
 		randNumber := opRand.Float64()
-		log.Println("this is :", pActualRMW)
 		if pActualWrites+pActualRMW > randNumber {
 			if pActualWrites > randNumber {
 				if !*blindWrites {

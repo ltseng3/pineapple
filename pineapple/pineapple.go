@@ -521,7 +521,6 @@ func (r *Replica) bcastRMWGet(instance int32, ballot int32, command []state.Comm
 
 	n := r.N - 1
 	q := r.Id
-	log.Println("doing rmw")
 	for sent := 0; sent < n; {
 		q = (q + 1) % int32(r.N)
 		if q == r.Id {
@@ -830,6 +829,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 		status: PREPARING,
 		lb:     &LeaderBookkeeping{clientProposals: proposals, getDone: false, completed: false},
 	}
+	log.Println("got ", propose.Command.Op)
 
 	// Use Paxos if operation is not Read / Write
 	if propose.Command.Op != state.PUT || propose.Command.Op != state.GET {
