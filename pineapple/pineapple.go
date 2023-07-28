@@ -602,13 +602,13 @@ func (r *Replica) handleRMWGetReply(rmwGetReply *pineappleproto.RMWGetReply) {
 		r.recordCommands(r.instanceSpace[rmwGetReply.Instance].cmds)
 		r.sync()
 
-		r.bcastRMWSet(rmwGetReply.Instance, rmwGetReply.Ballot)
+		r.bcastRMWSet(rmwGetReply.Instance, rmwGetReply.Ballot, key)
 	}
 }
 
 var pRMWSet pineappleproto.RMWSet
 
-func (r *Replica) bcastRMWSet(instance int32, ballot int32) {
+func (r *Replica) bcastRMWSet(instance int32, ballot int32, key int) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Println("Accept bcast failed:", err)
@@ -618,6 +618,7 @@ func (r *Replica) bcastRMWSet(instance int32, ballot int32) {
 	pRMWSet.Instance = instance
 	pRMWSet.Ballot = ballot
 	pRMWSet.Command = r.instanceSpace[instance].cmds
+	pRMWSet.Key = key
 	pRMWSet.Payload = r.data[int(pRMWSet.Command[0].K)]
 	args := &pRMWSet
 
@@ -670,6 +671,9 @@ func (r *Replica) handleRMWSet(rmwSet *pineappleproto.RMWSet) {
 		rmwSetReply = &pineappleproto.RMWSetReply{Instance: rmwSet.Instance, OK: TRUE, Ballot: r.defaultBallot}
 	}
 	inst.receivedRMW = rmwSet.Payload // store received object in instance space
+	if r.isLargerTag(r.data[rmwSet.Key].Tag, inst.receivedRMW.Tag) {
+		r.data[rmwSet.Key] = inst.receivedRMW
+	}
 
 	r.replyRMWSet(rmwSet.LeaderId, rmwSetReply)
 }
@@ -690,7 +694,6 @@ func (r *Replica) handleRMWSetReply(rmwSetReply *pineappleproto.RMWSetReply) {
 				Timestamp: inst.lb.clientProposals[0].Timestamp}
 			inst.lb.completed = true
 			r.ReplyProposeTS(propreply, inst.lb.clientProposals[0].Reply)
-			r.bcastCommit(rmwSetReply.Instance, rmwSetReply.Ballot, inst.cmds)
 		}
 	}
 
@@ -857,6 +860,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	}
 }
 
+/*
 func (r *Replica) executeCommands() {
 	i := int32(0)
 	for !r.Shutdown {
@@ -884,6 +888,8 @@ func (r *Replica) executeCommands() {
 	}
 
 }
+
+*/
 
 var clockChan chan bool
 

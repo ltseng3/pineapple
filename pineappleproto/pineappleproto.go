@@ -79,6 +79,7 @@ type RMWSet struct {
 	Instance int32
 	Ballot   int32
 	Command  []state.Command
+	Key      int
 	Payload  Payload
 }
 
