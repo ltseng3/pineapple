@@ -219,6 +219,7 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo,
 				queuedReqs += 1
 			}
 		}
+		log.Println("Writing: ", args.Command.Op)
 
 		before := time.Now()
 		writer.WriteByte(genericsmrproto.PROPOSE)
@@ -248,6 +249,7 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 			log.Println(reply.CommandId)
 			break
 		}
+		log.Println("reading")
 
 		after := time.Now()
 		orInfo.sema.Release(1)
