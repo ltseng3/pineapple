@@ -833,10 +833,6 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 		lb:     &LeaderBookkeeping{clientProposals: proposals, getDone: false, completed: false},
 	}
 
-	if r.Id == 0 && propose.Command.Op == state.GET {
-		log.Println("Reading op, ", propose.CommandId)
-	}
-
 	// Use Paxos if operation is not Read / Write
 	if propose.Command.Op != state.PUT && propose.Command.Op != state.GET {
 		r.instanceSpace[instNo] = &Instance{
