@@ -133,16 +133,19 @@ func main() {
 			make(map[int32]bool, *outstandingReqs)}
 
 		// the percent of each operation actually performed by this specific client
-		var pActualWrites float64
-		var pActualRMW float64
-		// set correct percentages based on client's connection
-		if leader == 0 { // connected to coordinator/leader node
-			pActualWrites = (*percentWrites * 3) - 1
+		pActualWrites := *percentWrites
+		pActualRMW := *percentRMWs
+		if *percentRMWs != 0 {
+			// set correct percentages based on client's connection
 			pActualRMW = *percentRMWs * 3
-		} else { // connected to replica
-			pActualWrites = .5
-			pActualRMW = 0
+			pActualWrites = (1 - pActualRMW) / 2
+			if leader != 0 { // not connected to coordinator/leader node
+				// determine write % from leader's client's write %
+				pActualWrites = ((*percentWrites * 3) - pActualWrites) / 2
+				pActualRMW = 0
+			}
 		}
+
 		//waitTime := startTime.Intn(3)
 		//time.Sleep(time.Duration(waitTime) * 100 * 1e6)
 		go simulatedClientWriter(writer, orInfo, pActualWrites, pActualRMW)
