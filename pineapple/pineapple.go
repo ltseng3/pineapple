@@ -619,7 +619,7 @@ func (r *Replica) bcastRMWSet(instance int32, ballot int32, key int) {
 	pRMWSet.Ballot = ballot
 	pRMWSet.Command = r.instanceSpace[instance].cmds
 	pRMWSet.Key = key
-	pRMWSet.Payload = r.data[int(pRMWSet.Command[0].K)]
+	pRMWSet.Payload = r.data[key]
 	args := &pRMWSet
 
 	n := r.N - 1
