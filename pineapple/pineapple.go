@@ -653,6 +653,7 @@ func (r *Replica) handleRMWSet(rmwSet *pineappleproto.RMWSet) {
 				status: ACCEPTED,
 				lb:     nil,
 			}
+			inst = r.instanceSpace[rmwSet.Instance]
 			rmwSetReply = &pineappleproto.RMWSetReply{Instance: rmwSet.Instance, OK: TRUE, Ballot: r.defaultBallot}
 		}
 	} else if inst.ballot > rmwSet.Ballot {
@@ -670,8 +671,6 @@ func (r *Replica) handleRMWSet(rmwSet *pineappleproto.RMWSet) {
 		}
 		rmwSetReply = &pineappleproto.RMWSetReply{Instance: rmwSet.Instance, OK: TRUE, Ballot: r.defaultBallot}
 	}
-
-	log.Println(inst.receivedRMW)
 	inst.receivedRMW = rmwSet.Payload // store received object in instance space
 	if r.isLargerTag(r.data[rmwSet.Key].Tag, inst.receivedRMW.Tag) {
 		r.data[rmwSet.Key] = inst.receivedRMW
