@@ -133,8 +133,8 @@ func main() {
 			make(map[int32]bool, *outstandingReqs)}
 
 		// the percent of each operation actually performed by this specific client
-		pActualWrites := *percentWrites
-		pActualRMW := *percentRMWs
+		var pActualWrites float64
+		var pActualRMW float64
 		if *percentRMWs != 0 {
 			// set correct percentages based on client's connection
 			pActualRMW = *percentRMWs * 3
