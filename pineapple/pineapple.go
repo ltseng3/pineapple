@@ -693,7 +693,6 @@ func (r *Replica) handleRMWSetReply(rmwSetReply *pineappleproto.RMWSetReply) {
 				Value:     state.NIL,
 				Timestamp: inst.lb.clientProposals[0].Timestamp}
 			inst.lb.completed = true
-			log.Println("replying ", propreply.CommandId)
 			r.ReplyProposeTS(propreply, inst.lb.clientProposals[0].Reply)
 		}
 	}
@@ -763,7 +762,6 @@ func (r *Replica) handleCommit(commit *pineappleproto.Commit) {
 			lb:     nil,
 		}
 	} else {
-		log.Println("here 1")
 		r.instanceSpace[commit.Instance].cmds = commit.Command
 		r.instanceSpace[commit.Instance].status = COMMITTED
 		r.instanceSpace[commit.Instance].ballot = commit.Ballot
@@ -792,12 +790,10 @@ func (r *Replica) handleCommitShort(commit *pineappleproto.CommitShort) {
 			lb:           nil,
 		}
 	} else {
-		log.Println("here 2")
 		r.instanceSpace[commit.Instance].status = COMMITTED
 		r.instanceSpace[commit.Instance].ballot = commit.Ballot
 		if inst.lb != nil && inst.lb.clientProposals != nil {
 			for i := 0; i < len(inst.lb.clientProposals); i++ {
-				log.Println("here 3")
 				r.ProposeChan <- inst.lb.clientProposals[i]
 			}
 			inst.lb.clientProposals = nil
@@ -835,6 +831,10 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 		ballot: 0,
 		status: PREPARING,
 		lb:     &LeaderBookkeeping{clientProposals: proposals, getDone: false, completed: false},
+	}
+
+	if r.Id == 0 && propose.Command.Op == state.GET {
+		log.Println("Reading op, ", propose.CommandId)
 	}
 
 	// Use Paxos if operation is not Read / Write
