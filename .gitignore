@@ -19,6 +19,7 @@ gus-epaxos
 
 bi/pineappleproto.go
 bi/pineappleprotomarsh.go
+scraps.go
 .idea
 
 pineapple

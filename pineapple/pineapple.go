@@ -42,22 +42,14 @@ type Replica struct {
 	setReplyRPC  uint8
 
 	// Paxos
-	prepareChan      chan fastrpc.Serializable
-	prepareReplyChan chan fastrpc.Serializable
-	rmwGetChan       chan fastrpc.Serializable
-	rmwGetReplyChan  chan fastrpc.Serializable
-	rmwSetChan       chan fastrpc.Serializable
-	rmwSetReplyChan  chan fastrpc.Serializable
-	commitChan       chan fastrpc.Serializable
-	commitShortChan  chan fastrpc.Serializable
-	prepareRPC       uint8
-	prepareReplyRPC  uint8
-	rmwGetRPC        uint8
-	rmwGetReplyRPC   uint8
-	rmwSetRPC        uint8
-	rmwSetReplyRPC   uint8
-	commitRPC        uint8
-	commitShortRPC   uint8
+	rmwGetChan      chan fastrpc.Serializable
+	rmwGetReplyChan chan fastrpc.Serializable
+	rmwSetChan      chan fastrpc.Serializable
+	rmwSetReplyChan chan fastrpc.Serializable
+	rmwGetRPC       uint8
+	rmwGetReplyRPC  uint8
+	rmwSetRPC       uint8
+	rmwSetReplyRPC  uint8
 
 	IsLeader bool // does this replica think it is the leader
 	Shutdown bool
@@ -110,14 +102,6 @@ func NewReplica(id int, peerAddrList []string, exec bool, dreply bool) *Replica 
 		make(chan fastrpc.Serializable, CHAN_BUFFER_SIZE),
 		make(chan fastrpc.Serializable, CHAN_BUFFER_SIZE),
 		make(chan fastrpc.Serializable, CHAN_BUFFER_SIZE),
-		make(chan fastrpc.Serializable, CHAN_BUFFER_SIZE),
-		make(chan fastrpc.Serializable, CHAN_BUFFER_SIZE),
-		make(chan fastrpc.Serializable, CHAN_BUFFER_SIZE),
-		make(chan fastrpc.Serializable, CHAN_BUFFER_SIZE),
-		0,
-		0,
-		0,
-		0,
 		0,
 		0,
 		0,
@@ -141,14 +125,10 @@ func NewReplica(id int, peerAddrList []string, exec bool, dreply bool) *Replica 
 	r.setReplyRPC = r.RegisterRPC(new(pineappleproto.SetReply), r.setReplyChan)
 
 	// Paxos
-	r.prepareRPC = r.RegisterRPC(new(pineappleproto.Prepare), r.prepareChan)
-	r.prepareReplyRPC = r.RegisterRPC(new(pineappleproto.PrepareReply), r.prepareReplyChan)
 	r.rmwGetRPC = r.RegisterRPC(new(pineappleproto.RMWGet), r.rmwGetChan)
 	r.rmwGetReplyRPC = r.RegisterRPC(new(pineappleproto.RMWGetReply), r.rmwGetReplyChan)
 	r.rmwSetRPC = r.RegisterRPC(new(pineappleproto.RMWSet), r.rmwSetChan)
 	r.rmwSetReplyRPC = r.RegisterRPC(new(pineappleproto.RMWSetReply), r.rmwSetReplyChan)
-	r.commitRPC = r.RegisterRPC(new(pineappleproto.Commit), r.commitChan)
-	r.commitShortRPC = r.RegisterRPC(new(pineappleproto.CommitShort), r.commitShortChan)
 
 	go r.Run()
 
@@ -170,8 +150,18 @@ func (r *Replica) isLargerTag(currentTag pineappleproto.Tag, receivedTag pineapp
 	return false
 }
 
-func (r *Replica) replyPrepare(replicaId int32, reply *pineappleproto.PrepareReply) {
-	r.SendMsg(replicaId, r.prepareReplyRPC, reply)
+// Reply to client during ABD
+func (r *Replica) replyClient(instance int32) {
+	inst := r.instanceSpace[instance]
+	if inst.lb.clientProposals != nil && r.Dreply && !inst.lb.completed {
+		propreply := &genericsmrproto.ProposeReplyTS{
+			OK:        TRUE,
+			CommandId: inst.lb.clientProposals[0].CommandId,
+			Value:     state.NIL,
+			Timestamp: inst.lb.clientProposals[0].Timestamp}
+		r.ReplyProposeTS(propreply, inst.lb.clientProposals[0].Reply)
+		inst.lb.completed = true
+	}
 }
 
 func (r *Replica) replyRMWGet(replicaId int32, reply *pineappleproto.RMWGetReply) {
@@ -228,34 +218,25 @@ func (r *Replica) handleGet(get *pineappleproto.Get) {
 	data, doesExist := r.data[get.Key]
 
 	// If init or payload is empty, simply return empty payload
-	if r.instanceSpace[r.crtInstance] == nil || !doesExist { // TODO: Is this block needed?
+	if r.instanceSpace[r.crtInstance] == nil || !doesExist {
 		getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok, Write: get.Write,
-			Key: get.Key, Payload: pineappleproto.Payload{}, // TODO: test removing payload
+			Key: get.Key, Payload: pineappleproto.Payload{},
 		}
 		r.replyGet(get.ReplicaID, getReply)
 		return
 	}
 
 	// Return the most recent data held by storage node only if READ, since payload would be overwritten in write
-	if get.Write == 0 { // TODO: This was changed to 0, ensure no issues arise
+	if get.Write == 0 {
 		getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok, Write: get.Write,
 			Key: get.Key, Payload: data,
 		}
 		command.Op = 1
 	} else { // init with empty payload
 		getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok, Write: get.Write,
-			Key: get.Key, Payload: pineappleproto.Payload{}, // TODO: test removing payload
+			Key: get.Key, Payload: pineappleproto.Payload{},
 		}
 	}
-
-	/*
-		cmds := make([]state.Command, 1)
-
-			if getReply.OK == TRUE {
-				r.recordCommands(cmds)
-				r.sync()
-			}
-	*/
 
 	r.replyGet(get.ReplicaID, getReply)
 }
@@ -293,18 +274,8 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			inst.lb.getDone = true                                // getPhase completed
 
 			// Optimized read; don't proceed to set if the quorum all has the latest timestamp
-			if getReply.Write == 0 &&
-				identicalCount == receivedDataCount {
-				// respond to client
-				if inst.lb.clientProposals != nil && r.Dreply && !inst.lb.completed {
-					propreply := &genericsmrproto.ProposeReplyTS{
-						OK:        TRUE,
-						CommandId: inst.lb.clientProposals[0].CommandId,
-						Value:     state.NIL,
-						Timestamp: inst.lb.clientProposals[0].Timestamp}
-					r.ReplyProposeTS(propreply, inst.lb.clientProposals[0].Reply)
-					inst.lb.completed = true
-				}
+			if (getReply.Write == 0) && (identicalCount == receivedDataCount) {
+				r.replyClient(getReply.Instance)
 				return
 			}
 
@@ -376,132 +347,11 @@ func (r *Replica) handleSet(set *pineappleproto.Set) {
 // Response handler for Set request on nodes
 func (r *Replica) handleSetReply(setReply *pineappleproto.SetReply) {
 	inst := r.instanceSpace[setReply.Instance]
-
 	inst.lb.setOKs++
 
 	// Wait for a majority of acknowledgements
 	if inst.lb.setOKs+1 > r.N>>1 {
-		if inst.lb.clientProposals != nil && r.Dreply && !inst.lb.completed {
-			propreply := &genericsmrproto.ProposeReplyTS{
-				OK:        TRUE,
-				CommandId: inst.lb.clientProposals[0].CommandId,
-				Value:     state.NIL,
-				Timestamp: inst.lb.clientProposals[0].Timestamp}
-			r.ReplyProposeTS(propreply, inst.lb.clientProposals[0].Reply)
-			inst.lb.completed = true
-		}
-
-		//r.sync() //is this necessary?
-	}
-
-}
-
-func (r *Replica) bcastPrepare(instance int32, ballot int32, toInfinity bool) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Println("Prepare bcast failed:", err)
-		}
-	}()
-	ti := FALSE
-	if toInfinity {
-		ti = TRUE
-	}
-	args := &pineappleproto.Prepare{LeaderId: r.Id, Instance: instance, Ballot: ballot, ToInfinity: ti}
-
-	n := r.N - 1
-	q := r.Id
-
-	for sent := 0; sent < n; {
-		q = (q + 1) % int32(r.N)
-		if q == r.Id {
-			break
-		}
-		if !r.Alive[q] {
-			continue
-		}
-		sent++
-		r.SendMsg(q, r.prepareRPC, args)
-	}
-}
-
-func (r *Replica) handlePrepare(prepare *pineappleproto.Prepare) {
-	inst := r.instanceSpace[prepare.Instance]
-	var preply *pineappleproto.PrepareReply
-
-	if inst == nil {
-		ok := TRUE
-		if r.defaultBallot > prepare.Ballot {
-			ok = FALSE
-		}
-		preply = &pineappleproto.PrepareReply{Instance: prepare.Instance, OK: ok,
-			Ballot: r.defaultBallot, Command: make([]state.Command, 0)}
-	} else {
-		ok := TRUE
-		if prepare.Ballot < inst.ballot {
-			ok = FALSE
-		}
-		preply = &pineappleproto.PrepareReply{Instance: prepare.Instance, OK: ok,
-			Ballot: inst.ballot, Command: inst.cmds}
-	}
-
-	r.replyPrepare(prepare.LeaderId, preply)
-
-	if prepare.ToInfinity == TRUE && prepare.Ballot > r.defaultBallot {
-		r.defaultBallot = prepare.Ballot
-	}
-}
-
-func (r *Replica) handlePrepareReply(preply *pineappleproto.PrepareReply) {
-	inst := r.instanceSpace[preply.Instance]
-
-	if inst.status != PREPARING {
-		// TODO: should replies for non-current ballots be ignored?
-		// we've moved on -- these are delayed replies, so just ignore
-		return
-	}
-
-	if preply.OK == TRUE {
-		inst.lb.prepareOKs++
-
-		if preply.Ballot > inst.lb.maxRecvBallot {
-			inst.cmds = preply.Command
-			inst.lb.maxRecvBallot = preply.Ballot
-			if inst.lb.clientProposals != nil {
-				// there is already a competing command for this instance,
-				// so we put the client proposal back in the queue so that
-				// we know to try it in another instance
-				for i := 0; i < len(inst.lb.clientProposals); i++ {
-					r.ProposeChan <- inst.lb.clientProposals[i]
-				}
-				inst.lb.clientProposals = nil
-			}
-		}
-
-		if inst.lb.prepareOKs+1 > r.N>>1 {
-			inst.status = PREPARED
-			inst.lb.nacks = 0
-			if inst.ballot > r.defaultBallot {
-				r.defaultBallot = inst.ballot
-			}
-			r.recordInstanceMetadata(r.instanceSpace[preply.Instance])
-			r.sync()
-			r.bcastRMWGet(preply.Instance, inst.ballot, inst.cmds)
-		}
-	} else {
-		// TODO: there is probably another active leader
-		inst.lb.nacks++
-		if preply.Ballot > inst.lb.maxRecvBallot {
-			inst.lb.maxRecvBallot = preply.Ballot
-		}
-		if inst.lb.nacks >= r.N>>1 {
-			if inst.lb.clientProposals != nil {
-				// try the proposals in another instance
-				for i := 0; i < len(inst.lb.clientProposals); i++ {
-					r.ProposeChan <- inst.lb.clientProposals[i]
-				}
-				inst.lb.clientProposals = nil
-			}
-		}
+		r.replyClient(setReply.Instance)
 	}
 }
 
@@ -700,112 +550,6 @@ func (r *Replica) handleRMWSetReply(rmwSetReply *pineappleproto.RMWSetReply) {
 
 }
 
-var pc pineappleproto.Commit
-var pcs pineappleproto.CommitShort
-
-func (r *Replica) bcastCommit(instance int32, ballot int32, command []state.Command) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Println("Commit bcast failed:", err)
-		}
-	}()
-	pc.LeaderId = r.Id
-	pc.Instance = instance
-	pc.Ballot = ballot
-	pc.Command = command
-	args := &pc
-	pcs.LeaderId = r.Id
-	pcs.Instance = instance
-	pcs.Ballot = ballot
-	pcs.Count = int32(len(command))
-	argsShort := &pcs
-
-	//args := &paxosproto.Commit{r.Id, instance, command}
-
-	n := r.N - 1
-	q := r.Id
-	sent := 0
-
-	for sent < n {
-		q = (q + 1) % int32(r.N)
-		if q == r.Id {
-			break
-		}
-		if !r.Alive[q] {
-			continue
-		}
-		sent++
-		r.SendMsg(q, r.commitShortRPC, argsShort)
-	}
-	if q != r.Id {
-		for sent < r.N-1 {
-			q = (q + 1) % int32(r.N)
-			if q == r.Id {
-				break
-			}
-			if !r.Alive[q] {
-				continue
-			}
-			sent++
-			r.SendMsg(q, r.commitRPC, args)
-		}
-	}
-}
-
-func (r *Replica) handleCommit(commit *pineappleproto.Commit) {
-	inst := r.instanceSpace[commit.Instance]
-
-	if inst == nil {
-		r.instanceSpace[commit.Instance] = &Instance{
-			cmds:   commit.Command,
-			ballot: commit.Ballot,
-			status: COMMITTED,
-			lb:     nil,
-		}
-	} else {
-		r.instanceSpace[commit.Instance].cmds = commit.Command
-		r.instanceSpace[commit.Instance].status = COMMITTED
-		r.instanceSpace[commit.Instance].ballot = commit.Ballot
-		if inst.lb != nil && inst.lb.clientProposals != nil {
-			for i := 0; i < len(inst.lb.clientProposals); i++ {
-				r.ProposeChan <- inst.lb.clientProposals[i]
-			}
-			inst.lb.clientProposals = nil
-		}
-	}
-
-	r.updateCommittedUpTo()
-	r.recordInstanceMetadata(r.instanceSpace[commit.Instance])
-	r.recordCommands(commit.Command)
-}
-
-func (r *Replica) handleCommitShort(commit *pineappleproto.CommitShort) {
-	inst := r.instanceSpace[commit.Instance]
-
-	if inst == nil {
-		r.instanceSpace[commit.Instance] = &Instance{
-			cmds:         nil,
-			receivedData: nil,
-			ballot:       commit.Ballot,
-			status:       COMMITTED,
-			lb:           nil,
-		}
-	} else {
-		r.instanceSpace[commit.Instance].status = COMMITTED
-		r.instanceSpace[commit.Instance].ballot = commit.Ballot
-		if inst.lb != nil && inst.lb.clientProposals != nil {
-			for i := 0; i < len(inst.lb.clientProposals); i++ {
-				r.ProposeChan <- inst.lb.clientProposals[i]
-			}
-			inst.lb.clientProposals = nil
-		}
-	}
-
-	r.updateCommittedUpTo()
-
-	r.recordInstanceMetadata(r.instanceSpace[commit.Instance])
-}
-
 func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	/*
 		if !r.IsLeader {
@@ -858,42 +602,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	}
 }
 
-/*
-func (r *Replica) executeCommands() {
-	i := int32(0)
-	for !r.Shutdown {
-		executed := false
-
-		for i <= r.committedUpTo {
-			if r.instanceSpace[i].cmds != nil {
-				inst := r.instanceSpace[i]
-				for j := 0; j < len(inst.cmds); j++ {
-					key := int(inst.cmds[0].K)
-					if r.isLargerTag(r.data[key].Tag, inst.receivedRMW.Tag) {
-						r.data[key] = inst.receivedRMW
-					}
-				}
-				i++
-				executed = true
-			} else {
-				break
-			}
-		}
-
-		if !executed {
-			time.Sleep(CLOCK)
-		}
-	}
-
-}
-
-*/
-
 var clockChan chan bool
-
-func (r *Replica) makeUniqueBallot(ballot int32) int32 {
-	return (ballot << 4) | r.Id
-}
 
 func (r *Replica) updateCommittedUpTo() {
 	for r.instanceSpace[r.committedUpTo+1] != nil &&
@@ -993,16 +702,6 @@ func (r *Replica) Run() {
 			// deactivate the new proposals channel to prioritize the handling of protocol messages
 			onOffProposeChan = nil
 			break
-		case prepareS := <-r.prepareChan:
-			prepare := prepareS.(*pineappleproto.Prepare)
-			//got a Prepare message
-			r.handlePrepare(prepare)
-			break
-		case prepareReplyS := <-r.prepareReplyChan:
-			prepareReply := prepareReplyS.(*pineappleproto.PrepareReply)
-			//got a Prepare reply
-			r.handlePrepareReply(prepareReply)
-			break
 		case rmwGetS := <-r.rmwGetChan:
 			rmwGet := rmwGetS.(*pineappleproto.RMWGet)
 			//got an RMWGet message
@@ -1022,18 +721,6 @@ func (r *Replica) Run() {
 			rmwSetReply := rmwSetReplyS.(*pineappleproto.RMWSetReply)
 			//got an Accept reply
 			r.handleRMWSetReply(rmwSetReply)
-			break
-		case commitS := <-r.commitChan:
-			commit := commitS.(*pineappleproto.Commit)
-			//got a Commit message
-			log.Printf("Received Commit from replica %d, for instance %d\n", commit.LeaderId, commit.Instance)
-			r.handleCommit(commit)
-			break
-		case commitS := <-r.commitShortChan:
-			commit := commitS.(*pineappleproto.CommitShort)
-			//got a Commit message
-			log.Printf("Received Commit from replica %d, for instance %d\n", commit.LeaderId, commit.Instance)
-			r.handleCommitShort(commit)
 			break
 		}
 	}
