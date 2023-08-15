@@ -10,19 +10,19 @@ else
   HOST=$(hostname | awk -F "." '{print $1}')
   echo "Hostname: $HOST"
 
-  if [ $HOST = "node-0" ]; then
+  if [ $HOST = "california" ]; then
       IP="10.10.1.1"
       PORT=7070
-  elif [ $HOST = "node-1" ]; then
+  elif [ $HOST = "virginia" ]; then
       IP="10.10.1.2"
       PORT=7071
-  elif [ $HOST = "node-2" ]; then
+  elif [ $HOST = "ireland" ]; then
       IP="10.10.1.3"
       PORT=7072
-  elif [ $HOST = "node-3" ]; then
+  elif [ $HOST = "oregon" ]; then
         IP="10.10.1.4"
         PORT=7073
-  elif [ $HOST = "node-4" ]; then
+  elif [ $HOST = "japan" ]; then
         IP="10.10.1.5"
         PORT=7074
   fi
