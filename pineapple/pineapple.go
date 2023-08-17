@@ -65,6 +65,7 @@ type Replica struct {
 
 type Instance struct {
 	cmds         []state.Command
+	initialTag   pineappleproto.Tag
 	receivedRMW  pineappleproto.Payload
 	receivedData []pineappleproto.Payload
 	ballot       int32
@@ -145,6 +146,8 @@ func (r *Replica) isLargerTag(currentTag pineappleproto.Tag, receivedTag pineapp
 		// if the replica is the leader and the tag has its id, prefer the receivedTag
 		if r.IsLeader && currentTag.ID == int(r.Id) {
 			return true
+		} else {
+			return currentTag.ID < receivedTag.ID
 		}
 	}
 	return false
@@ -258,16 +261,16 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 
 		if inst.lb.getOKs+1 > r.N>>1 {
 			key := getReply.Key
-			identicalCount := 0        // keep track of the count of identical responses
-			ownResponse := r.data[key] // this node's own data
+			identicalCount := 0                                     // keep track of the count of identical responses
+			ownTag := r.instanceSpace[getReply.Instance].initialTag // this node's own tag
 			// Find the largest received timestamp
 			for _, data := range r.instanceSpace[getReply.Instance].receivedData {
 				if r.isLargerTag(r.data[key].Tag, data.Tag) { // received value has larger tag
 					r.data[key] = getReply.Payload
 				}
-				// tracks if all responses are identical by comparing to own data
+				// tracks if all responses are identical by comparing to own tag
 				// since the received quorum includes itself
-				if data.Tag.Timestamp == ownResponse.Tag.Timestamp {
+				if data.Tag == ownTag {
 					identicalCount++
 				}
 			}
@@ -590,13 +593,16 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 		}
 		r.bcastRMWGet(instNo, 0, cmds)
 	} else { // use ABD
-		r.data[key] = pineappleproto.Payload{
-			Tag:   pineappleproto.Tag{Timestamp: int(propose.Timestamp), ID: int(r.Id)},
-			Value: int(propose.Command.V),
-		}
-
 		// Construct the pineapple payload from proposal data
 		if propose.Command.Op == state.PUT { // write operation
+			_, doesExist := r.data[key]
+			r.data[key] = pineappleproto.Payload{
+				Tag:   pineappleproto.Tag{Timestamp: int(propose.Timestamp), ID: int(r.Id)},
+				Value: int(propose.Command.V),
+			}
+			if !doesExist {
+				r.instanceSpace[instNo].initialTag = r.data[key].Tag
+			}
 			r.bcastGet(instNo, true, key)
 		} else if propose.Command.Op == state.GET { // read operation
 			r.bcastGet(instNo, false, key)
