@@ -220,8 +220,8 @@ func (r *Replica) handleGet(get *pineappleproto.Get) {
 
 	// If init or payload is empty, simply return empty payload
 	if r.instanceSpace[r.crtInstance] == nil || !doesExist {
-		getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok, Write: get.Write,
-			Key: get.Key, Payload: pineappleproto.Payload{},
+		getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok,
+			Write: get.Write, Key: get.Key, Payload: pineappleproto.Payload{},
 		}
 		r.replyGet(get.ReplicaID, getReply)
 		return
@@ -229,13 +229,17 @@ func (r *Replica) handleGet(get *pineappleproto.Get) {
 
 	// Return the most recent data held by storage node only if READ, since payload would be overwritten in write
 	if get.Write == 0 {
-		if r.isLargerTag(data.Tag, get.Payload.Tag) {
+		if r.isLargerTag(data.Tag, get.Payload.Tag) { // Replica has larger tag, send its data
 			r.data[get.Key] = get.Payload
-			data, _ = r.data[get.Key]
+			getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok,
+				Write: get.Write, Key: get.Key, Payload: get.Payload,
+			}
+		} else { // Replica has smaller tag, return received value
+			getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok,
+				Write: get.Write, Key: get.Key, Payload: data,
+			}
 		}
-		getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok, Write: get.Write,
-			Key: get.Key, Payload: data,
-		}
+
 		command.Op = 1
 	} else { // init with empty payload
 		getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok, Write: get.Write,
