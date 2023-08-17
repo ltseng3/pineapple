@@ -276,10 +276,10 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			inst.lb.getDone = true                                // getPhase completed
 
 			// Optimized read; don't proceed to set if the quorum all has the latest timestamp
-			//if (getReply.Write == 0) && (identicalCount == receivedDataCount) {
-			r.replyClient(getReply.Instance)
-			return
-			//}
+			if (getReply.Write == 0) && (identicalCount == receivedDataCount) {
+				r.replyClient(getReply.Instance)
+				return
+			}
 
 			write := false
 			inst.status = PREPARED
