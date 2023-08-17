@@ -218,18 +218,9 @@ func (r *Replica) handleGet(get *pineappleproto.Get) {
 	ok := TRUE
 	data, doesExist := r.data[get.Key]
 
-	// If init or payload is empty, simply return empty payload
-	if r.instanceSpace[r.crtInstance] == nil || !doesExist {
-		getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok,
-			Write: get.Write, Key: get.Key, Payload: pineappleproto.Payload{},
-		}
-		r.replyGet(get.ReplicaID, getReply)
-		return
-	}
-
 	// Return the most recent data held by storage node only if READ, since payload would be overwritten in write
 	if get.Write == 0 {
-		if r.isLargerTag(data.Tag, get.Payload.Tag) {
+		if !doesExist || r.isLargerTag(data.Tag, get.Payload.Tag) {
 			// Replica has smaller tag, return received value
 			r.data[get.Key] = get.Payload
 			getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok,
@@ -267,15 +258,16 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 
 		if inst.lb.getOKs+1 > r.N>>1 {
 			key := getReply.Key
-			identicalCount := 0 // keep track of the count of identical responses
-			firstResponse := r.instanceSpace[getReply.Instance].receivedData[0]
+			identicalCount := 0                 // keep track of the count of identical responses
+			ownResponse := r.data[getReply.Key] // this node's own data
 			// Find the largest received timestamp
 			for _, data := range r.instanceSpace[getReply.Instance].receivedData {
 				if r.isLargerTag(r.data[key].Tag, data.Tag) { // received value has larger tag
 					r.data[key] = getReply.Payload
 				}
-				// tracks if all responses are identical by comparing each to the first
-				if data.Tag.Timestamp == firstResponse.Tag.Timestamp {
+				// tracks if all responses are identical by comparing to own data
+				// since the received quorum includes itself
+				if data.Tag.Timestamp == ownResponse.Tag.Timestamp {
 					identicalCount++
 				}
 			}
