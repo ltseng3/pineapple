@@ -226,6 +226,7 @@ func (r *Replica) handleGet(get *pineappleproto.Get) {
 			getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok,
 				Write: get.Write, Key: get.Key, Payload: get.Payload,
 			}
+			log.Println(doesExist)
 		} else { // Replica has larger tag, send its data
 			getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok,
 				Write: get.Write, Key: get.Key, Payload: data,
@@ -258,8 +259,8 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 
 		if inst.lb.getOKs+1 > r.N>>1 {
 			key := getReply.Key
-			identicalCount := 0                 // keep track of the count of identical responses
-			ownResponse := r.data[getReply.Key] // this node's own data
+			identicalCount := 0        // keep track of the count of identical responses
+			ownResponse := r.data[key] // this node's own data
 			// Find the largest received timestamp
 			for _, data := range r.instanceSpace[getReply.Instance].receivedData {
 				if r.isLargerTag(r.data[key].Tag, data.Tag) { // received value has larger tag
