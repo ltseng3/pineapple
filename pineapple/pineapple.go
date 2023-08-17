@@ -229,12 +229,13 @@ func (r *Replica) handleGet(get *pineappleproto.Get) {
 
 	// Return the most recent data held by storage node only if READ, since payload would be overwritten in write
 	if get.Write == 0 {
-		if r.isLargerTag(data.Tag, get.Payload.Tag) { // Replica has larger tag, send its data
+		if r.isLargerTag(data.Tag, get.Payload.Tag) {
+			// Replica has smaller tag, return received value
 			r.data[get.Key] = get.Payload
 			getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok,
 				Write: get.Write, Key: get.Key, Payload: get.Payload,
 			}
-		} else { // Replica has smaller tag, return received value
+		} else { // Replica has larger tag, send its data
 			getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok,
 				Write: get.Write, Key: get.Key, Payload: data,
 			}
