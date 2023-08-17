@@ -192,7 +192,8 @@ func (r *Replica) bcastGet(instance int32, write bool, key int) {
 	if write {
 		wr = TRUE
 	}
-	args := &pineappleproto.Get{ReplicaID: r.Id, Instance: instance, Write: wr, Key: key}
+	args := &pineappleproto.Get{ReplicaID: r.Id, Instance: instance,
+		Write: wr, Key: key, Payload: r.data[key]}
 	replicaCount := r.N - 1
 	q := r.Id
 	// Send to each connected replica
@@ -228,6 +229,10 @@ func (r *Replica) handleGet(get *pineappleproto.Get) {
 
 	// Return the most recent data held by storage node only if READ, since payload would be overwritten in write
 	if get.Write == 0 {
+		if r.isLargerTag(data.Tag, get.Payload.Tag) {
+			r.data[get.Key] = get.Payload
+			data, _ = r.data[get.Key]
+		}
 		getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok, Write: get.Write,
 			Key: get.Key, Payload: data,
 		}

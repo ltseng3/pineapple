@@ -24,6 +24,7 @@ type Get struct {
 	Instance  int32
 	Write     uint8
 	Key       int
+	Payload   Payload
 }
 
 type GetReply struct {
