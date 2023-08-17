@@ -226,7 +226,6 @@ func (r *Replica) handleGet(get *pineappleproto.Get) {
 			getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok,
 				Write: get.Write, Key: get.Key, Payload: get.Payload,
 			}
-			log.Println(doesExist)
 		} else { // Replica has larger tag, send its data
 			getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok,
 				Write: get.Write, Key: get.Key, Payload: data,
