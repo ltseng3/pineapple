@@ -192,11 +192,15 @@ func (r *Replica) bcastGet(instance int32, write bool, key int) {
 		}
 	}()
 	wr := FALSE
+	data := pineappleproto.Payload{}
 	if write {
 		wr = TRUE
+	} else { //reading, send data
+		data = r.data[key]
 	}
+
 	args := &pineappleproto.Get{ReplicaID: r.Id, Instance: instance,
-		Write: wr, Key: key, Payload: r.data[key]}
+		Write: wr, Key: key, Payload: data}
 	replicaCount := r.N - 1
 	q := r.Id
 	// Send to each connected replica
@@ -217,7 +221,6 @@ func (r *Replica) bcastGet(instance int32, write bool, key int) {
 // Returns replica's value-tag pair to requester
 func (r *Replica) handleGet(get *pineappleproto.Get) {
 	var getReply *pineappleproto.GetReply
-	var command state.Command
 	ok := TRUE
 	data, doesExist := r.data[get.Key]
 
@@ -234,8 +237,6 @@ func (r *Replica) handleGet(get *pineappleproto.Get) {
 				Write: get.Write, Key: get.Key, Payload: data,
 			}
 		}
-
-		command.Op = 1
 	} else { // init with empty payload
 		getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok, Write: get.Write,
 			Key: get.Key, Payload: pineappleproto.Payload{},
@@ -595,16 +596,15 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 	} else { // use ABD
 		// Construct the pineapple payload from proposal data
 		if propose.Command.Op == state.PUT { // write operation
-			_, doesExist := r.data[key]
-			r.data[key] = pineappleproto.Payload{
-				Tag:   pineappleproto.Tag{Timestamp: int(propose.Timestamp), ID: int(r.Id)},
-				Value: int(propose.Command.V),
-			}
-			if !doesExist {
-				r.instanceSpace[instNo].initialTag = r.data[key].Tag
-			}
 			r.bcastGet(instNo, true, key)
 		} else if propose.Command.Op == state.GET { // read operation
+			_, doesExist := r.data[key]
+			if doesExist {
+				r.instanceSpace[instNo].initialTag = r.data[key].Tag
+			} else {
+				r.instanceSpace[instNo].initialTag = pineappleproto.Tag{Timestamp: 0, ID: int(r.Id)}
+				r.data[key] = pineappleproto.Payload{}
+			}
 			r.bcastGet(instNo, false, key)
 		}
 	}
