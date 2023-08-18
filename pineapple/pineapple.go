@@ -602,8 +602,9 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 			if doesExist {
 				r.instanceSpace[instNo].initialTag = r.data[key].Tag
 			} else {
-				r.instanceSpace[instNo].initialTag = pineappleproto.Tag{Timestamp: 0, ID: int(r.Id)}
-				r.data[key] = pineappleproto.Payload{}
+				tag := pineappleproto.Tag{Timestamp: 0, ID: int(r.Id)}
+				r.instanceSpace[instNo].initialTag = tag
+				r.data[key] = pineappleproto.Payload{Tag: tag, Value: 0}
 			}
 			r.bcastGet(instNo, false, key)
 		}
