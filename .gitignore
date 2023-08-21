@@ -25,3 +25,5 @@ scraps.go
 
 stable-store-*
 
+go.mod
+go.sum
