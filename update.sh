@@ -2,10 +2,10 @@
 cd ../pineapple || exit
 git stash && git stash clear && git pull
 
-export GOPATH=~/go/src/pineapple/src
-go install master
-go install server
-go install client
+export GOPATH=~/go/src/
+go install pineapple/src/master
+go install pineapple/src/server
+go install pineapple/src/client
 
 if [ "$1" = "client" ]; then
   . test.sh
