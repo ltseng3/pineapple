@@ -17,12 +17,12 @@
 pkg
 gus-epaxos
 
-bi/pineappleproto.go
-bi/pineappleprotomarsh.go
+src/bi/pineappleproto.go
+src/bi/pineappleprotomarsh.go
 scraps.go
 .idea
 
-pineapple
+src/pineapple
 
 stable-store-*
 

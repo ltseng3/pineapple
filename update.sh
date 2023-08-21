@@ -2,7 +2,10 @@
 cd ../pineapple || exit
 git stash && git stash clear && git pull
 
-go build -o program
+export GOPATH:~/go/src/pineapple
+go install master
+go install server
+go install client
 
 if [ "$1" = "client" ]; then
   . test.sh
@@ -44,10 +47,10 @@ else
   done
 
   if [ "$1" = "master" ]; then
-    ./program -maddr "10.10.1.1" -N 5 &
+    bin/master -maddr "10.10.1.1" -N 5 &
     sleep 0.5
   fi
 
-  go run server/server.go -maddr "10.10.1.1" -mport 7087 -addr "$IP" -port $PORT &
+  bin/server -maddr "10.10.1.1" -mport 7087 -addr "$IP" -port $PORT &
   sleep 0.5
 fi
