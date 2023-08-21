@@ -22,7 +22,5 @@ src/bi/pineappleprotomarsh.go
 scraps.go
 .idea
 
-src/pineapple
-
 stable-store-*
 
