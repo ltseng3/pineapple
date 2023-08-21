@@ -2,11 +2,7 @@
 cd ../pineapple || exit
 git stash && git stash clear && git pull
 
-export GOPATH=~/go/src/
-export GOBIN=~/go/src/pineapple/bin
-go install pineapple/src/master
-go install pineapple/src/server
-go install pineapple/src/client
+. compile.sh
 
 if [ "$1" = "client" ]; then
   . test.sh
@@ -58,6 +54,6 @@ else
   fi
 
   bin/server -maddr "10.10.1.1" -mport 7087 -addr "$IP" -port $PORT &
-  sleep 0.5
-  . test.sh $IP $PORT $ID
+  sleep 1.5
+  . test.sh $IP $PORT $ID &
 fi
