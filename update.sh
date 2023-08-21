@@ -17,18 +17,23 @@ else
   if [ $HOST = "california" ]; then
       IP="10.10.1.1"
       PORT=7070
+      ID=0
   elif [ $HOST = "virginia" ]; then
       IP="10.10.1.2"
       PORT=7071
+      ID=1
   elif [ $HOST = "ireland" ]; then
       IP="10.10.1.3"
       PORT=7072
+      ID=2
   elif [ $HOST = "oregon" ]; then
-        IP="10.10.1.4"
-        PORT=7073
+      IP="10.10.1.4"
+      PORT=7073
+      ID=3
   elif [ $HOST = "japan" ]; then
-        IP="10.10.1.5"
-        PORT=7074
+      IP="10.10.1.5"
+      PORT=7074
+      ID=4
   fi
   echo "Local IP: $IP"
   echo "Local PORT: $PORT"
@@ -54,4 +59,5 @@ else
 
   bin/server -maddr "10.10.1.1" -mport 7087 -addr "$IP" -port $PORT &
   sleep 0.5
+  . test.sh $IP $PORT $ID
 fi
