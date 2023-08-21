@@ -8,14 +8,12 @@ import (
 	"log"
 	"math/rand"
 	"net"
-	"net/rpc"
 	"os"
 	"runtime"
 	"sync"
 	"time"
 
 	"pineapple/src/genericsmrproto"
-	"pineapple/src/masterproto"
 	"pineapple/src/poisson"
 	"pineapple/src/state"
 	"pineapple/src/zipfian"
@@ -23,9 +21,9 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-var masterAddr *string = flag.String("maddr", "", "Master address. Defaults to localhost")
-var masterPort *int = flag.Int("mport", 7087, "Master port.")
-var serverID *int = flag.Int("serverID", 7070, "ID of client's server.")
+var serverAddr *string = flag.String("saddr", "", "Server address. Defaults to 10.10.1.1")
+var serverPort *int = flag.Int("sport", 7070, "Server port.")
+var serverID *int = flag.Int("serverID", 0, "Server's ID")
 var procs *int = flag.Int("p", 2, "GOMAXPROCS.")
 var conflicts *int = flag.Int("c", 0, "Percentage of conflicts. If -1, uses Zipfian distribution.")
 var forceLeader = flag.Int("l", -1, "Force client to talk to a certain replica.")
@@ -75,54 +73,18 @@ func main() {
 
 	orInfos = make([]*outstandingRequestInfo, *T)
 
-	var master *rpc.Client
-	var err error
-	for {
-		master, err = rpc.DialHTTP("tcp", fmt.Sprintf("%s:%d", *masterAddr, *masterPort))
-		if err != nil {
-			log.Println("Error connecting to master", err)
-		} else {
-			break
-		}
-	}
-
-	rlReply := new(masterproto.GetReplicaListReply)
-	for !rlReply.Ready {
-		err := master.Call("Master.GetReplicaList", new(masterproto.GetReplicaListArgs), rlReply)
-		if err != nil {
-			log.Println("Error making the GetReplicaList RPC", err)
-		}
-	}
-
-	leader := 0
-	if *forceLeader < 0 {
-		reply := new(masterproto.GetLeaderReply)
-		if err = master.Call("Master.GetLeader", new(masterproto.GetLeaderArgs), reply); err != nil {
-			log.Println("Error making the GetLeader RPC:", err)
-		}
-		leader = reply.LeaderId
-		log.Printf("The leader is replica %d\n", leader)
-	} else {
-		leader = *forceLeader
-	}
-
 	readings := make(chan *response, 100000)
 
 	//startTime := rand.New(rand.NewSource(time.Now().UnixNano()))
 	experimentStart := time.Now()
 
 	for i := 0; i < *T; i++ {
+		log.Println("Connected to node: ", *serverAddr)
 
-		// automatically allocate clients equally
-		if *singleClusterTest {
-			leader = i % len(rlReply.ReplicaList)
-		}
-
-		server, err := net.Dial("tcp", rlReply.ReplicaList[leader])
+		server, err := net.Dial("tcp", fmt.Sprintf("%s:%d", *serverAddr, *serverPort))
 		if err != nil {
-			log.Fatalf("Error connecting to replica %d\n", leader)
+			log.Fatalf("Error connecting to replica %s:%d\n", *serverAddr, *serverPort)
 		}
-		log.Print("Connected to replica ", leader, " at ", rlReply.ReplicaList[leader], "\n")
 
 		reader := bufio.NewReader(server)
 		writer := bufio.NewWriter(server)
@@ -140,7 +102,7 @@ func main() {
 			// set correct percentages based on client's connection
 			pActualRMW = *percentRMWs * 3
 			pActualWrites = (1 - pActualRMW) / 2
-			if leader != 0 { // not connected to coordinator/leader node
+			if *serverID != 0 { // not connected to coordinator/leader node
 				// determine write % from leader's client's write %
 				pActualWrites = ((*percentWrites * 3) - pActualWrites) / 2
 				pActualRMW = 0
@@ -150,12 +112,12 @@ func main() {
 		//waitTime := startTime.Intn(3)
 		//time.Sleep(time.Duration(waitTime) * 100 * 1e6)
 		go simulatedClientWriter(writer, orInfo, pActualWrites, pActualRMW)
-		go simulatedClientReader(reader, orInfo, readings, leader)
+		go simulatedClientReader(reader, orInfo, readings, *serverID)
 
 		orInfos[i] = orInfo
 	}
 	if *singleClusterTest {
-		printerMultipleFile(readings, len(rlReply.ReplicaList), experimentStart, rampDown, rampUp, timeout)
+		printerMultipleFile(readings, *serverID, experimentStart, rampDown, rampUp, timeout)
 	} else {
 		printer(readings)
 	}
@@ -331,33 +293,30 @@ func printer(readings chan *response) {
 	}
 }
 
-func printerMultipleFile(readings chan *response, numLeader int, experimentStart time.Time, rampDown, rampUp, timeout *int) {
+func printerMultipleFile(readings chan *response, replicaID int, experimentStart time.Time, rampDown, rampUp, timeout *int) {
 	lattputFile, err := os.Create("lattput.txt")
 	if err != nil {
 		log.Println("Error creating lattput file", err)
 		return
 	}
 
-	latFileRead := make([]*os.File, numLeader)
-	latFileWrite := make([]*os.File, numLeader)
-	for i := 0; i < numLeader; i++ {
-		fileName := fmt.Sprintf("latFileRead-%d.txt", i)
-		latFileRead[i], err = os.Create(fileName)
-		if err != nil {
-			log.Println("Error creating latency file", err)
-			return
-		}
-		// latFile.WriteString("# time (ns), latency, commit latency\n")
+	fileName := fmt.Sprintf("latFileRead-%d.txt", replicaID)
+	latFileRead, err := os.Create(fileName)
+	if err != nil {
+		log.Println("Error creating latency file", err)
+		return
+	}
+	//latFile.WriteString("# time (ns), latency, commit latency\n")
 
-		fileName = fmt.Sprintf("latFileWrite-%d.txt", i)
-		latFileWrite[i], err = os.Create(fileName)
-		if err != nil {
-			log.Println("Error creating latency file", err)
-			return
-		}
+	fileName = fmt.Sprintf("latFileWrite-%d.txt", replicaID)
+	latFileWrite, err := os.Create(fileName)
+	if err != nil {
+		log.Println("Error creating latency file", err)
+		return
 	}
 
 	startTime := time.Now()
+
 	for {
 		time.Sleep(time.Second)
 
@@ -368,13 +327,12 @@ func printerMultipleFile(readings chan *response, numLeader int, experimentStart
 		currentRuntime := time.Now().Sub(experimentStart)
 		for i := 0; i < count; i++ {
 			resp := <-readings
-
 			// Log all to latency file if they are not within the ramp up or ramp down period.
 			if *rampUp < int(currentRuntime.Seconds()) && int(currentRuntime.Seconds()) < *timeout-*rampDown {
 				if resp.isRead {
-					latFileRead[resp.replicaID].WriteString(fmt.Sprintf("%d %f %f\n", resp.receivedAt.UnixNano(), resp.rtt, resp.commitLatency))
+					latFileRead.WriteString(fmt.Sprintf("%d %f %f\n", resp.receivedAt.UnixNano(), resp.rtt, resp.commitLatency))
 				} else {
-					latFileWrite[resp.replicaID].WriteString(fmt.Sprintf("%d %f %f\n", resp.receivedAt.UnixNano(), resp.rtt, resp.commitLatency))
+					latFileWrite.WriteString(fmt.Sprintf("%d %f %f\n", resp.receivedAt.UnixNano(), resp.rtt, resp.commitLatency))
 				}
 				sum += resp.rtt
 				commitSum += resp.commitLatency
