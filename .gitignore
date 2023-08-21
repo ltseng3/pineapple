@@ -17,6 +17,7 @@
 pkg
 gus-epaxos
 
+bin
 src/bi/pineappleproto.go
 src/bi/pineappleprotomarsh.go
 scraps.go
