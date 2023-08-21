@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"encoding/binary"
 	"io"
-	"pineapple/fastrpc"
-	"pineapple/state"
+	"pineapple/src/fastrpc"
+	"pineapple/src/state"
 	"sync"
 )
 

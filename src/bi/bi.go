@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"pineapple/binidl"
+	"pineapple/src/binidl"
 )
 
 func usage() {

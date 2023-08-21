@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"pineapple/masterproto"
-	"pineapple/pineapple"
+	"pineapple/src/masterproto"
+	"pineapple/src/pineapple"
 )
 
 var masterAddr *string = flag.String("maddr", "10.10.1.1", "Master address. Defaults to 10.10.1.1.")

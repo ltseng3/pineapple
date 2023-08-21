@@ -1,7 +1,7 @@
 package genericsmrproto
 
 import (
-	"pineapple/state"
+	"pineapple/src/state"
 )
 
 const (

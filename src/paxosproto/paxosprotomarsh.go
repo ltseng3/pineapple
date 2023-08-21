@@ -6,8 +6,8 @@ import (
 	"io"
 	"sync"
 
-	"pineapple/fastrpc"
-	"pineapple/state"
+	"pineapple/src/fastrpc"
+	"pineapple/src/state"
 )
 
 type byteReader interface {

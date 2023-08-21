@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
-	"pineapple/genericsmrproto"
-	"pineapple/masterproto"
-	"pineapple/poisson"
-	"pineapple/state"
-	"pineapple/zipfian"
+	"pineapple/src/genericsmrproto"
+	"pineapple/src/masterproto"
+	"pineapple/src/poisson"
+	"pineapple/src/state"
+	"pineapple/src/zipfian"
 
 	"golang.org/x/sync/semaphore"
 )

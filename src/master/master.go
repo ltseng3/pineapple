@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"pineapple/genericsmrproto"
-	"pineapple/masterproto"
+	"pineapple/src/genericsmrproto"
+	"pineapple/src/masterproto"
 )
 
 var masterAddr *string = flag.String("maddr", "10.10.1.1", "Master address. Defaults to 10.10.1.1.")
