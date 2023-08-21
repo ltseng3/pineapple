@@ -24,6 +24,3 @@ scraps.go
 .idea
 
 stable-store-*
-
-go.mod
-go.sum
