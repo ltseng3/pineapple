@@ -2,7 +2,7 @@
 cd ../pineapple || exit
 git stash && git stash clear && git pull
 
-export GOPATH:~/go/src/pineapple
+export GOPATH=~/go/src/pineapple
 go install master
 go install server
 go install client
