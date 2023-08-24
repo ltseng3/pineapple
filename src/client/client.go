@@ -21,6 +21,8 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+var masterAddr *string = flag.String("maddr", "10.10.1.1", "Master address. Defaults to 10.10.1.1")
+var masterPort *int = flag.Int("mport", 7087, "Master port.")
 var serverAddr *string = flag.String("saddr", "", "Server address. Defaults to 10.10.1.1")
 var serverPort *int = flag.Int("sport", 7070, "Server port.")
 var serverID *int = flag.Int("serverID", 0, "Server's ID")
@@ -95,24 +97,25 @@ func main() {
 			make(map[int32]time.Time, *outstandingReqs),
 			make(map[int32]state.Operation, *outstandingReqs)}
 
-		// the percent of each operation actually performed by this specific client
-		pActualWrites := *percentWrites
-		pActualRMW := *percentRMWs
-		if *percentRMWs != 0 {
-			// set correct percentages based on client's connection
-			pActualRMW = *percentRMWs * 3
-			pActualWrites = (1 - pActualRMW) / 2
-			if *serverID != 0 { // not connected to coordinator/leader node
-				// determine write % from leader's client's write %
-				pActualWrites = ((*percentWrites * 3) - pActualWrites) / 2
-				pActualRMW = 0
+		if *serverID != 0 && *percentRMWs != 0 { // not already connected to leader
+			master, err := net.Dial("tcp", fmt.Sprintf("%s:%d", *masterAddr, *masterPort))
+			if err != nil {
+				log.Fatalf("Error connecting to replica %s:%d\n", *masterAddr, *masterPort)
 			}
+
+			mReader := bufio.NewReader(master)
+			mWriter := bufio.NewWriter(master)
+
+			go simulatedClientWriter(writer, mWriter /* master writer*/, orInfo, *serverID)
+			go simulatedClientReader(mReader, orInfo, readings, *serverID)
+			go simulatedClientReader(reader, orInfo, readings, *serverID)
+		} else {
+			go simulatedClientWriter(writer, nil /* master writer*/, orInfo, *serverID)
+			go simulatedClientReader(reader, orInfo, readings, *serverID)
 		}
 
 		//waitTime := startTime.Intn(3)
 		//time.Sleep(time.Duration(waitTime) * 100 * 1e6)
-		go simulatedClientWriter(writer, orInfo, pActualWrites, pActualRMW)
-		go simulatedClientReader(reader, orInfo, readings, *serverID)
 
 		orInfos[i] = orInfo
 	}
@@ -123,7 +126,7 @@ func main() {
 	}
 }
 
-func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo, pActualWrites float64, pActualRMW float64) {
+func simulatedClientWriter(writer *bufio.Writer, mWriter *bufio.Writer, orInfo *outstandingRequestInfo, serverID int) {
 	args := genericsmrproto.Propose{
 		CommandId: 0,
 		Command:   state.Command{Op: state.PUT, K: 0, V: 1},
@@ -155,14 +158,14 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo,
 
 		// Determine operation type
 		randNumber := opRand.Float64()
-		if pActualWrites+pActualRMW > randNumber {
-			if pActualWrites > randNumber {
+		if *percentWrites+*percentRMWs > randNumber {
+			if *percentWrites > randNumber {
 				if !*blindWrites {
 					args.Command.Op = state.PUT // write operation
 				} else {
 					//args.Command.Op = state.PUT_BLIND
 				}
-			} else if pActualRMW > 0 {
+			} else if *percentRMWs > 0 {
 				args.Command.Op = state.RMW // RMW operation
 			}
 		} else {
@@ -187,9 +190,15 @@ func simulatedClientWriter(writer *bufio.Writer, orInfo *outstandingRequestInfo,
 		}
 
 		before := time.Now()
-		writer.WriteByte(genericsmrproto.PROPOSE)
-		args.Marshal(writer)
-		writer.Flush()
+		if args.Command.Op == state.RMW && serverID != 0 { // send RMWs to leader
+			mWriter.WriteByte(genericsmrproto.PROPOSE)
+			args.Marshal(mWriter)
+			mWriter.Flush()
+		} else {
+			writer.WriteByte(genericsmrproto.PROPOSE)
+			args.Marshal(writer)
+			writer.Flush()
+		}
 
 		orInfo.Lock()
 		orInfo.operation[id] = args.Command.Op
