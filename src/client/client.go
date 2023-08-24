@@ -21,8 +21,8 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-var masterAddr *string = flag.String("maddr", "10.10.1.1", "Master address. Defaults to 10.10.1.1")
-var masterPort *int = flag.Int("mport", 7087, "Master port.")
+var leaderAddr *string = flag.String("laddr", "10.10.1.1", "Leader address. Defaults to 10.10.1.1")
+var leaderPort *int = flag.Int("lport", 7070, "Leader port.")
 var serverAddr *string = flag.String("saddr", "", "Server address. Defaults to 10.10.1.1")
 var serverPort *int = flag.Int("sport", 7070, "Server port.")
 var serverID *int = flag.Int("serverID", 0, "Server's ID")
@@ -98,16 +98,16 @@ func main() {
 			make(map[int32]state.Operation, *outstandingReqs)}
 
 		if *serverID != 0 && *percentRMWs != 0 { // not already connected to leader
-			master, err := net.Dial("tcp", fmt.Sprintf("%s:%d", *masterAddr, *masterPort))
+			leader, err := net.Dial("tcp", fmt.Sprintf("%s:%d", *leaderAddr, *leaderPort))
 			if err != nil {
-				log.Fatalf("Error connecting to replica %s:%d\n", *masterAddr, *masterPort)
+				log.Fatalf("Error connecting to replica %s:%d\n", *leaderAddr, *leaderPort)
 			}
 
-			mReader := bufio.NewReader(master)
-			mWriter := bufio.NewWriter(master)
+			lReader := bufio.NewReader(leader)
+			lWriter := bufio.NewWriter(leader)
 
-			go simulatedClientWriter(writer, mWriter /* master writer*/, orInfo, *serverID)
-			go simulatedClientReader(mReader, orInfo, readings, *serverID)
+			go simulatedClientWriter(writer, lWriter /* leader writer*/, orInfo, *serverID)
+			go simulatedClientReader(lReader, orInfo, readings, *serverID)
 			go simulatedClientReader(reader, orInfo, readings, *serverID)
 		} else {
 			go simulatedClientWriter(writer, nil /* master writer*/, orInfo, *serverID)
@@ -126,7 +126,7 @@ func main() {
 	}
 }
 
-func simulatedClientWriter(writer *bufio.Writer, mWriter *bufio.Writer, orInfo *outstandingRequestInfo, serverID int) {
+func simulatedClientWriter(writer *bufio.Writer, lWriter *bufio.Writer, orInfo *outstandingRequestInfo, serverID int) {
 	args := genericsmrproto.Propose{
 		CommandId: 0,
 		Command:   state.Command{Op: state.PUT, K: 0, V: 1},
@@ -191,9 +191,9 @@ func simulatedClientWriter(writer *bufio.Writer, mWriter *bufio.Writer, orInfo *
 
 		before := time.Now()
 		if args.Command.Op == state.RMW && serverID != 0 { // send RMWs to leader
-			mWriter.WriteByte(genericsmrproto.PROPOSE)
-			args.Marshal(mWriter)
-			mWriter.Flush()
+			lWriter.WriteByte(genericsmrproto.PROPOSE)
+			args.Marshal(lWriter)
+			lWriter.Flush()
 		} else {
 			writer.WriteByte(genericsmrproto.PROPOSE)
 			args.Marshal(writer)
