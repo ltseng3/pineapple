@@ -110,7 +110,7 @@ func main() {
 			go simulatedClientReader(lReader, orInfo, readings, *serverID)
 			go simulatedClientReader(reader, orInfo, readings, *serverID)
 		} else {
-			go simulatedClientWriter(writer, nil /* master writer*/, orInfo, *serverID)
+			go simulatedClientWriter(writer, nil /* leader writer*/, orInfo, *serverID)
 			go simulatedClientReader(reader, orInfo, readings, *serverID)
 		}
 
@@ -301,13 +301,14 @@ func printer(readings chan *response) {
 }
 
 func printerMultipleFile(readings chan *response, replicaID int, experimentStart time.Time, rampDown, rampUp, timeout *int) {
-	lattputFile, err := os.Create("lattput.txt")
+	fileName := fmt.Sprintf("lattput-%d.txt", replicaID)
+	lattputFile, err := os.Create(fileName)
 	if err != nil {
 		log.Println("Error creating lattput file", err)
 		return
 	}
 
-	fileName := fmt.Sprintf("latFileRead-%d.txt", replicaID)
+	fileName = fmt.Sprintf("latFileRead-%d.txt", replicaID)
 	latFileRead, err := os.Create(fileName)
 	if err != nil {
 		log.Println("Error creating latency file", err)
