@@ -21,9 +21,9 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-var leaderAddr *string = flag.String("laddr", "10.10.1.1", "Leader address. Defaults to 10.10.1.1")
+var leaderAddr *string = flag.String("laddr", "10.10.1.2", "Leader address. Defaults to 10.10.1.2")
 var leaderPort *int = flag.Int("lport", 7070, "Leader port.")
-var serverAddr *string = flag.String("saddr", "", "Server address. Defaults to 10.10.1.1")
+var serverAddr *string = flag.String("saddr", "", "Server address.")
 var serverPort *int = flag.Int("sport", 7070, "Server port.")
 var serverID *int = flag.Int("serverID", 0, "Server's ID")
 var procs *int = flag.Int("p", 2, "GOMAXPROCS.")
