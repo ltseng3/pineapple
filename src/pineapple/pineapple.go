@@ -148,6 +148,7 @@ func (r *Replica) isLargerTag(currentTag pineappleproto.Tag, receivedTag pineapp
 		if currentTag.ID == receivedTag.ID {
 			return false
 		} else if r.IsLeader && currentTag.ID == int(r.Id) {
+			log.Println("this is true")
 			// if the replica is the leader and the tag has its id, prefer the receivedTag
 			return true
 		} else {
