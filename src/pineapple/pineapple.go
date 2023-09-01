@@ -274,7 +274,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			for _, data := range r.instanceSpace[getReply.Instance].receivedData {
 				if r.isLargerTag(ownTag, data.Tag) { // received value has larger tag
 					//if r.isLargerTag(r.data[key].Tag, data.Tag) { // received value has larger tag
-					log.Println("own: ", r.data[key].Tag, "rec.: ", data.Tag)
+					log.Println("own: ", ownTag, "rec.: ", data.Tag)
 					r.data[key] = getReply.Payload
 				}
 				// tracks if all responses are identical by comparing to own tag
