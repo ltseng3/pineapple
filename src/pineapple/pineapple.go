@@ -146,7 +146,6 @@ func (r *Replica) isLargerTag(currentTag pineappleproto.Tag, receivedTag pineapp
 	} else if receivedTag.Timestamp == currentTag.Timestamp {
 		// if the replica is the leader and the tag has its id, prefer the receivedTag
 		if r.IsLeader && currentTag.ID == int(r.Id) {
-			log.Println("larger 2")
 			return true
 		} else {
 			return currentTag.ID < receivedTag.ID
@@ -346,6 +345,7 @@ func (r *Replica) handleSet(set *pineappleproto.Set) {
 	if r.isLargerTag(r.data[set.Key].Tag, set.Payload.Tag) {
 		r.data[set.Key] = set.Payload
 	}
+	log.Println("key: ", r.data[set.Key], " new timestamp: ", r.data[set.Key].Tag.Timestamp)
 
 	setReply = &pineappleproto.SetReply{Instance: set.Instance}
 
