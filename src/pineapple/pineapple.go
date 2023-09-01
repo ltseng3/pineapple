@@ -263,8 +263,9 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 
 		if inst.lb.getOKs+1 > r.N>>1 {
 			key := getReply.Key
-			identicalCount := 0                                     // keep track of the count of identical responses
-			ownTag := r.instanceSpace[getReply.Instance].initialTag // this node's own tag
+			identicalCount := 0 // keep track of the count of identical responses
+			//ownTag := r.instanceSpace[getReply.Instance].initialTag // this node's own tag
+			ownTag := r.data[getReply.Key].Tag
 			// Find the largest received timestamp
 			for _, data := range r.instanceSpace[getReply.Instance].receivedData {
 				if r.isLargerTag(r.data[key].Tag, data.Tag) { // received value has larger tag
