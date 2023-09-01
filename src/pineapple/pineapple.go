@@ -144,8 +144,11 @@ func (r *Replica) isLargerTag(currentTag pineappleproto.Tag, receivedTag pineapp
 		log.Println("larger 1, received: ", receivedTag.Timestamp, " own: ", currentTag.Timestamp)
 		return true
 	} else if receivedTag.Timestamp == currentTag.Timestamp {
-		// if the replica is the leader and the tag has its id, prefer the receivedTag
-		if r.IsLeader && currentTag.ID == int(r.Id) {
+		// tags are identical
+		if currentTag.ID == receivedTag.ID {
+			return false
+		} else if r.IsLeader && currentTag.ID == int(r.Id) {
+			// if the replica is the leader and the tag has its id, prefer the receivedTag
 			return true
 		} else {
 			return currentTag.ID < receivedTag.ID
