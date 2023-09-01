@@ -141,6 +141,8 @@ func simulatedClientWriter(writer *bufio.Writer, lWriter *bufio.Writer, orInfo *
 	queuedReqs := 0 // The number of poisson departures that have been missed
 
 	for id := int32(0); ; id++ {
+		// debug !!
+		time.Sleep(2)
 		args.CommandId = id
 
 		// Determine key
