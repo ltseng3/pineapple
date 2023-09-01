@@ -291,6 +291,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			write := false
 			inst.status = PREPARED
 			inst.lb.nacks = 0
+			log.Println("writing")
 			// If writing, choose a higher unique timestamp (by adjoining replica ID with Timestamp++)
 			if getReply.Write == 1 {
 				log.Println("tag initially: ", r.data[key].Tag.Timestamp)
