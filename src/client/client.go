@@ -142,7 +142,7 @@ func simulatedClientWriter(writer *bufio.Writer, lWriter *bufio.Writer, orInfo *
 
 	for id := int32(0); ; id++ {
 		// debug !!
-		time.Sleep(2)
+		time.Sleep(20)
 		args.CommandId = id
 
 		// Determine key
