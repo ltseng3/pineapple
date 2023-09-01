@@ -269,6 +269,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			// Find the largest received timestamp
 			for _, data := range r.instanceSpace[getReply.Instance].receivedData {
 				if r.isLargerTag(r.data[key].Tag, data.Tag) { // received value has larger tag
+					log.Println("own: ", r.data[key].Tag, "rec.: ", data.Tag)
 					r.data[key] = getReply.Payload
 				}
 				// tracks if all responses are identical by comparing to own tag
@@ -277,7 +278,6 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 					identicalCount++
 				}
 			}
-			log.Println("own: ", ownTag, "rec.: ", r.instanceSpace[getReply.Instance].receivedData[0].Tag)
 			receivedDataCount := len(r.instanceSpace[getReply.Instance].receivedData)
 			r.instanceSpace[getReply.Instance].receivedData = nil // clear slice, no longer needed
 			inst.lb.getDone = true                                // getPhase completed
