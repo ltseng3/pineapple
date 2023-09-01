@@ -345,7 +345,7 @@ func (r *Replica) handleSet(set *pineappleproto.Set) {
 	if r.isLargerTag(r.data[set.Key].Tag, set.Payload.Tag) {
 		r.data[set.Key] = set.Payload
 	}
-	log.Println("key: ", r.data[set.Key], " new timestamp: ", r.data[set.Key].Tag.Timestamp)
+	log.Println("key: ", set.Key, " new timestamp: ", r.data[set.Key].Tag.Timestamp)
 
 	setReply = &pineappleproto.SetReply{Instance: set.Instance}
 
