@@ -293,6 +293,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			inst.lb.nacks = 0
 			// If writing, choose a higher unique timestamp (by adjoining replica ID with Timestamp++)
 			if getReply.Write == 1 {
+				log.Println("tag initially: ", r.data[key].Tag.Timestamp)
 				write = true
 				newTag := pineappleproto.Tag{Timestamp: r.data[key].Tag.Timestamp + 1, ID: int(r.Id)}
 				r.data[key] = pineappleproto.Payload{Tag: newTag, Value: r.data[key].Value}
