@@ -278,6 +278,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			for _, data := range r.instanceSpace[getReply.Instance].receivedData {
 				// tracks if all responses are identical by comparing to own tag
 				// since the received quorum includes itself
+				log.Println("Own: ", ownTag, " received:", data.Tag)
 				if data.Tag == ownTag {
 					identicalCount++
 				}
@@ -291,7 +292,9 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 				r.replyClient(getReply.Instance)
 				return
 			}
-			log.Println("no optimized read")
+			if getReply.Write == 0 {
+				log.Println("no optimized read")
+			}
 
 			write := false
 			inst.status = PREPARED
