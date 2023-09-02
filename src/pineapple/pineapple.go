@@ -65,6 +65,7 @@ type Replica struct {
 
 type Instance struct {
 	cmds         []state.Command
+	initialTag   pineappleproto.Tag
 	receivedRMW  pineappleproto.Payload
 	receivedData []pineappleproto.Payload
 	ballot       int32
@@ -147,7 +148,6 @@ func (r *Replica) isLargerTag(currentTag pineappleproto.Tag, receivedTag pineapp
 		if currentTag.ID == receivedTag.ID {
 			return false
 		} else if r.IsLeader && currentTag.ID == int(r.Id) {
-			log.Println("this is true")
 			// if the replica is the leader and the tag has its id, prefer the receivedTag
 			return true
 		} else {
@@ -272,23 +272,25 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 
 		if inst.lb.getOKs+1 > r.N>>1 {
 			identicalCount := 0 // keep track of the count of identical responses
-			ownTag := r.data[key].Tag
+			firstReceivedTag := r.instanceSpace[getReply.Instance].receivedData[0].Tag
 
 			// Check if the quorum has all identical values
 			for _, data := range r.instanceSpace[getReply.Instance].receivedData {
-				// tracks if all responses are identical by comparing to own tag
-				// since the received quorum includes itself
-				log.Println("Own: ", ownTag, " received:", data.Tag)
-				if data.Tag == ownTag {
+				if data.Tag == firstReceivedTag {
 					identicalCount++
 				}
+			}
+			// check if all received messages are >= initial tag
+			if inst.initialTag == firstReceivedTag || r.isLargerTag(inst.initialTag, firstReceivedTag) {
+				identicalCount++
 			}
 			receivedDataCount := len(r.instanceSpace[getReply.Instance].receivedData)
 			r.instanceSpace[getReply.Instance].receivedData = nil // clear slice, no longer needed
 			inst.lb.getDone = true                                // getPhase completed
 
-			// Optimized read; don't proceed to set if the quorum all has the latest timestamp
-			if (getReply.Write == 0) && (identicalCount == receivedDataCount) {
+			// Optimized read; don't proceed to set if the quorum (including this node)
+			// all has the latest timestamp
+			if (getReply.Write == 0) && (identicalCount == receivedDataCount+1) {
 				r.replyClient(getReply.Instance)
 				return
 			}
@@ -354,11 +356,8 @@ func (r *Replica) handleSet(set *pineappleproto.Set) {
 	if r.isLargerTag(r.data[set.Key].Tag, set.Payload.Tag) {
 		r.data[set.Key] = set.Payload
 	}
-	log.Println("key: ", set.Key, " from: ", set.ReplicaID, " new timestamp: ", r.data[set.Key].Tag.Timestamp)
 
 	setReply = &pineappleproto.SetReply{Instance: set.Instance}
-
-	//r.sync()
 	r.replySet(set.ReplicaID, setReply)
 }
 
@@ -569,13 +568,6 @@ func (r *Replica) handleRMWSetReply(rmwSetReply *pineappleproto.RMWSetReply) {
 }
 
 func (r *Replica) handlePropose(propose *genericsmr.Propose) {
-	/*
-		if !r.IsLeader {
-			preply := &genericsmrproto.ProposeReplyTS{TRUE, -1, state.NIL, 0}
-			r.ReplyProposeTS(preply, propose.Reply)
-			return
-		}
-	*/
 	for r.instanceSpace[r.crtInstance] != nil {
 		r.crtInstance++
 	}
@@ -610,10 +602,13 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 		if propose.Command.Op == state.PUT { // write operation
 			r.bcastGet(instNo, true, key)
 		} else if propose.Command.Op == state.GET { // read operation
-			_, doesExist := r.data[key]
+			data, doesExist := r.data[key]
 			if !doesExist {
 				tag := pineappleproto.Tag{Timestamp: 0, ID: int(r.Id)}
+				r.instanceSpace[instNo].initialTag = tag
 				r.data[key] = pineappleproto.Payload{Tag: tag, Value: 0}
+			} else {
+				r.instanceSpace[instNo].initialTag = data.Tag
 			}
 			r.bcastGet(instNo, false, key)
 		}
