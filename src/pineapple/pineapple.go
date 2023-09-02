@@ -65,7 +65,6 @@ type Replica struct {
 
 type Instance struct {
 	cmds         []state.Command
-	initialTag   pineappleproto.Tag
 	receivedRMW  pineappleproto.Payload
 	receivedData []pineappleproto.Payload
 	ballot       int32
@@ -254,6 +253,7 @@ func (r *Replica) handleGet(get *pineappleproto.Get) {
 // Chooses the most recent vt pair after waiting for majority ACKs (or increment timestamp if write)
 func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 	inst := r.instanceSpace[getReply.Instance]
+	key := getReply.Key
 	if inst.lb.getDone { // avoid proceeding to set phase several times
 		return
 	}
@@ -261,22 +261,21 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 	r.instanceSpace[getReply.Instance].receivedData =
 		append(r.instanceSpace[getReply.Instance].receivedData, getReply.Payload)
 
+	// update local value to largest received
+	if r.isLargerTag(r.data[key].Tag, getReply.Payload.Tag) {
+		r.data[key] = getReply.Payload
+	}
+
 	// Send the new vt pair to all nodes after getting majority
 	if getReply.OK == TRUE {
 		inst.lb.getOKs++
 
 		if inst.lb.getOKs+1 > r.N>>1 {
-			key := getReply.Key
-			identicalCount := 0                                     // keep track of the count of identical responses
-			ownTag := r.instanceSpace[getReply.Instance].initialTag // this node's own tag
-			//ownTag := r.data[getReply.Key].Tag
-			// Find the largest received timestamp
+			identicalCount := 0 // keep track of the count of identical responses
+			ownTag := r.data[key].Tag
+
+			// Check if the quorum has all identical values
 			for _, data := range r.instanceSpace[getReply.Instance].receivedData {
-				if r.isLargerTag(ownTag, data.Tag) { // received value has larger tag
-					//if r.isLargerTag(r.data[key].Tag, data.Tag) { // received value has larger tag
-					log.Println("own: ", ownTag, "rec.: ", data.Tag)
-					r.data[key] = getReply.Payload
-				}
 				// tracks if all responses are identical by comparing to own tag
 				// since the received quorum includes itself
 				if data.Tag == ownTag {
@@ -299,7 +298,6 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			inst.lb.nacks = 0
 			// If writing, choose a higher unique timestamp (by adjoining replica ID with Timestamp++)
 			if getReply.Write == 1 {
-				log.Println("tag initially: ", r.data[key].Tag.Timestamp)
 				write = true
 				newTag := pineappleproto.Tag{Timestamp: r.data[key].Tag.Timestamp + 1, ID: int(r.Id)}
 				r.data[key] = pineappleproto.Payload{Tag: newTag, Value: r.data[key].Value}
@@ -610,11 +608,8 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 			r.bcastGet(instNo, true, key)
 		} else if propose.Command.Op == state.GET { // read operation
 			_, doesExist := r.data[key]
-			if doesExist {
-				r.instanceSpace[instNo].initialTag = r.data[key].Tag
-			} else {
+			if !doesExist {
 				tag := pineappleproto.Tag{Timestamp: 0, ID: int(r.Id)}
-				r.instanceSpace[instNo].initialTag = tag
 				r.data[key] = pineappleproto.Payload{Tag: tag, Value: 0}
 			}
 			r.bcastGet(instNo, false, key)
