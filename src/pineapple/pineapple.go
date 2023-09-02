@@ -141,7 +141,6 @@ func NewReplica(id int, peerAddrList []string, exec bool, dreply bool) *Replica 
 // If both tags have the same timestamp, the tag with the Paxos leader id is smaller
 func (r *Replica) isLargerTag(currentTag pineappleproto.Tag, receivedTag pineappleproto.Tag) bool {
 	if receivedTag.Timestamp > currentTag.Timestamp {
-		log.Println("larger 1, received: ", receivedTag.Timestamp, " own: ", currentTag.Timestamp)
 		return true
 	} else if receivedTag.Timestamp == currentTag.Timestamp {
 		// tags are identical
@@ -293,9 +292,6 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			if (getReply.Write == 0) && (identicalCount == receivedDataCount+1) {
 				r.replyClient(getReply.Instance)
 				return
-			}
-			if getReply.Write == 0 {
-				log.Println("no optimized read")
 			}
 
 			write := false
