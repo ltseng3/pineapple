@@ -343,10 +343,10 @@ func (r *Replica) bcastSet(instance int32, write bool, key int, payload pineappl
 			continue
 		}
 
-		// don't message replicas that have max tag
-		if !r.instanceSpace[instance].lb.readRequired[q] {
-			continue
-		}
+		//// don't message replicas that have max tag
+		//if !r.instanceSpace[instance].lb.readRequired[q] {
+		//	continue
+		//}
 
 		r.SendMsg(q, r.setRPC, args)
 	}
