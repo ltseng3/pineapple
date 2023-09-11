@@ -64,18 +64,20 @@ type Replica struct {
 }
 
 type Instance struct {
-	cmds         []state.Command
-	initialTag   pineappleproto.Tag
-	receivedRMW  pineappleproto.Payload
-	receivedData []pineappleproto.Payload
-	ballot       int32
-	status       InstanceStatus
-	lb           *LeaderBookkeeping
+	cmds            []state.Command
+	initialTag      pineappleproto.Tag
+	receivedRMW     pineappleproto.Payload
+	receivedData    []*pineappleproto.GetReply
+	receivedRMWData []pineappleproto.Payload
+	ballot          int32
+	status          InstanceStatus
+	lb              *LeaderBookkeeping
 }
 
 type LeaderBookkeeping struct {
 	clientProposals []*genericsmr.Propose
 	maxRecvBallot   int32
+	readRequired    map[int32]bool
 	getOKs          int
 	setOKs          int
 	getDone         bool // has get phase been completed
@@ -232,17 +234,17 @@ func (r *Replica) handleGet(get *pineappleproto.Get) {
 		if !doesExist || r.isLargerTag(data.Tag, get.Payload.Tag) {
 			// Replica has smaller tag, return received value
 			r.data[get.Key] = get.Payload
-			getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok,
-				Write: get.Write, Key: get.Key, Payload: get.Payload,
+			getReply = &pineappleproto.GetReply{ReplicaID: r.Id, Instance: get.Instance,
+				OK: ok, Write: get.Write, Key: get.Key, Payload: get.Payload,
 			}
 		} else { // Replica has larger tag, send its data
-			getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok,
-				Write: get.Write, Key: get.Key, Payload: data,
+			getReply = &pineappleproto.GetReply{ReplicaID: r.Id, Instance: get.Instance,
+				OK: ok, Write: get.Write, Key: get.Key, Payload: data,
 			}
 		}
 	} else { // init with empty payload
-		getReply = &pineappleproto.GetReply{Instance: get.Instance, OK: ok, Write: get.Write,
-			Key: get.Key, Payload: pineappleproto.Payload{},
+		getReply = &pineappleproto.GetReply{ReplicaID: r.Id, Instance: get.Instance, OK: ok,
+			Write: get.Write, Key: get.Key, Payload: pineappleproto.Payload{},
 		}
 	}
 
@@ -258,7 +260,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 	}
 
 	r.instanceSpace[getReply.Instance].receivedData =
-		append(r.instanceSpace[getReply.Instance].receivedData, getReply.Payload)
+		append(r.instanceSpace[getReply.Instance].receivedData, getReply)
 
 	// update local value to largest received
 	if r.isLargerTag(r.data[key].Tag, getReply.Payload.Tag) {
@@ -271,12 +273,14 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 
 		if inst.lb.getOKs+1 > r.N>>1 {
 			identicalCount := 0 // keep track of the count of identical responses
-			firstReceivedTag := r.instanceSpace[getReply.Instance].receivedData[0].Tag
+			firstReceivedTag := r.instanceSpace[getReply.Instance].receivedData[0].Payload.Tag
 
 			// Check if the quorum has all identical values
-			for _, data := range r.instanceSpace[getReply.Instance].receivedData {
-				if data.Tag == firstReceivedTag {
+			for _, reply := range r.instanceSpace[getReply.Instance].receivedData {
+				if reply.Payload.Tag == firstReceivedTag {
 					identicalCount++
+				} else { // tag is less than max tag
+					r.instanceSpace[getReply.Instance].lb.readRequired[reply.ReplicaID] = true
 				}
 			}
 			// check if all received messages are >= initial tag
@@ -336,6 +340,11 @@ func (r *Replica) bcastSet(instance int32, write bool, key int, payload pineappl
 			break
 		}
 		if !r.Alive[q] {
+			continue
+		}
+
+		// don't message replicas that have max tag
+		if !r.instanceSpace[instance].lb.readRequired[q] {
 			continue
 		}
 
@@ -437,8 +446,8 @@ func (r *Replica) handleRMWGetReply(rmwGetReply *pineappleproto.RMWGetReply) {
 		return
 	}
 
-	r.instanceSpace[rmwGetReply.Instance].receivedData =
-		append(r.instanceSpace[rmwGetReply.Instance].receivedData, rmwGetReply.Payload)
+	r.instanceSpace[rmwGetReply.Instance].receivedRMWData =
+		append(r.instanceSpace[rmwGetReply.Instance].receivedRMWData, rmwGetReply.Payload)
 
 	inst.lb.rmwGetOKs++
 
@@ -446,14 +455,14 @@ func (r *Replica) handleRMWGetReply(rmwGetReply *pineappleproto.RMWGetReply) {
 		key := rmwGetReply.Key
 
 		// Find the largest received timestamp
-		for _, data := range r.instanceSpace[rmwGetReply.Instance].receivedData {
+		for _, data := range r.instanceSpace[rmwGetReply.Instance].receivedRMWData {
 			if r.isLargerTag(r.data[key].Tag, data.Tag) { // received value has larger tag
 				r.data[key] = rmwGetReply.Payload
 			}
 		}
 
-		r.instanceSpace[rmwGetReply.Instance].receivedData = nil // clear slice, no longer needed
-		inst.lb.rmwGetDone = true                                // rmwGet phase completed
+		r.instanceSpace[rmwGetReply.Instance].receivedRMWData = nil // clear slice, no longer needed
+		inst.lb.rmwGetDone = true                                   // rmwGet phase completed
 
 		inst.lb.nacks = 0
 		// If writing, choose a higher unique timestamp (by adjoining replica ID with Timestamp++)
@@ -581,7 +590,12 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 		cmds:   cmds,
 		ballot: 0,
 		status: PREPARING,
-		lb:     &LeaderBookkeeping{clientProposals: proposals, getDone: false, completed: false},
+		lb: &LeaderBookkeeping{
+			readRequired:    map[int32]bool{},
+			clientProposals: proposals,
+			getDone:         false,
+			completed:       false,
+		},
 	}
 
 	// Use Paxos if operation is not Read / Write

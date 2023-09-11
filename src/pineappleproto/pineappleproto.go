@@ -28,11 +28,12 @@ type Get struct {
 }
 
 type GetReply struct {
-	Instance int32
-	OK       uint8
-	Write    uint8
-	Key      int
-	Payload  Payload
+	ReplicaID int32
+	Instance  int32
+	OK        uint8
+	Write     uint8
+	Key       int
+	Payload   Payload
 }
 
 type Set struct {
