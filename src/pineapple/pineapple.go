@@ -373,7 +373,8 @@ func (r *Replica) handleSetReply(setReply *pineappleproto.SetReply) {
 	inst.lb.setOKs++
 
 	// Wait for a majority of acknowledgements
-	if inst.lb.setOKs+1 > r.N>>1 {
+	if (inst.lb.setOKs+1 > len(inst.lb.hasMaxTag) && len(inst.lb.hasMaxTag) < r.N>>1) ||
+		inst.lb.setOKs+1 > r.N>>1 {
 		r.replyClient(setReply.Instance)
 	}
 }
