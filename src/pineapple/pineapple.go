@@ -77,7 +77,7 @@ type Instance struct {
 type LeaderBookkeeping struct {
 	clientProposals []*genericsmr.Propose
 	maxRecvBallot   int32
-	readRequired    map[int32]bool
+	hasMaxTag       map[int32]bool
 	getOKs          int
 	setOKs          int
 	getDone         bool // has get phase been completed
@@ -279,8 +279,9 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 			for _, reply := range r.instanceSpace[getReply.Instance].receivedData {
 				if reply.Payload.Tag == firstReceivedTag {
 					identicalCount++
-				} else { // tag is less than max tag
-					r.instanceSpace[getReply.Instance].lb.readRequired[reply.ReplicaID] = true
+
+					// replica has the biggest tag already, do not send tag in 2nd phase
+					r.instanceSpace[getReply.Instance].lb.hasMaxTag[reply.ReplicaID] = true
 				}
 			}
 			// check if all received messages are >= initial tag
@@ -343,10 +344,11 @@ func (r *Replica) bcastSet(instance int32, write bool, key int, payload pineappl
 			continue
 		}
 
-		//// don't message replicas that have max tag
-		//if !r.instanceSpace[instance].lb.readRequired[q] {
-		//	continue
-		//}
+		// don't message replicas that already have the largest tag
+		if r.instanceSpace[instance].lb.hasMaxTag[q] {
+			log.Println(q, "has largest tag already")
+			continue
+		}
 
 		r.SendMsg(q, r.setRPC, args)
 	}
@@ -591,7 +593,7 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 		ballot: 0,
 		status: PREPARING,
 		lb: &LeaderBookkeeping{
-			readRequired:    map[int32]bool{},
+			hasMaxTag:       map[int32]bool{},
 			clientProposals: proposals,
 			getDone:         false,
 			completed:       false,
