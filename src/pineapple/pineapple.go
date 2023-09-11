@@ -274,18 +274,20 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 		if inst.lb.getOKs+1 > r.N>>1 {
 			identicalCount := 0 // keep track of the count of identical responses
 			ownTag := r.data[key].Tag
+			firstReceivedTag := r.instanceSpace[getReply.Instance].receivedData[0].Payload.Tag
 
 			// Check if the quorum has all identical values
 			for _, reply := range r.instanceSpace[getReply.Instance].receivedData {
-				if reply.Payload.Tag == ownTag {
+				if reply.Payload.Tag == firstReceivedTag {
 					identicalCount++
-
+				}
+				if reply.Payload.Tag == ownTag {
 					// replica has the biggest tag already, do not send tag in 2nd phase
 					r.instanceSpace[getReply.Instance].lb.hasMaxTag[reply.ReplicaID] = true
 				}
 			}
 			// check if all received messages are >= initial tag
-			if inst.initialTag == ownTag || r.isLargerTag(inst.initialTag, ownTag) {
+			if inst.initialTag == firstReceivedTag || r.isLargerTag(inst.initialTag, firstReceivedTag) {
 				identicalCount++
 			}
 			receivedDataCount := len(r.instanceSpace[getReply.Instance].receivedData)
