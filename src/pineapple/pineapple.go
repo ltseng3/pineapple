@@ -346,7 +346,6 @@ func (r *Replica) bcastSet(instance int32, write bool, key int, payload pineappl
 
 		// don't message replicas that already have the largest tag
 		if r.instanceSpace[instance].lb.hasMaxTag[q] {
-			log.Println(q, "has largest tag already")
 			continue
 		}
 
