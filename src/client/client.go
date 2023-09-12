@@ -65,14 +65,13 @@ type outstandingRequestInfo struct {
 var orInfos []*outstandingRequestInfo
 
 func main() {
-	if *serverID == 0 {
-		time.Sleep(180 * time.Second)
-		return
-	}
-
 	flag.Parse()
 
 	runtime.GOMAXPROCS(*procs)
+
+	if *serverID == 0 {
+		return
+	}
 
 	if *conflicts > 100 {
 		log.Fatalf("Conflicts percentage must be between 0 and 100.\n")
