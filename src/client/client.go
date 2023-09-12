@@ -69,10 +69,6 @@ func main() {
 
 	runtime.GOMAXPROCS(*procs)
 
-	if *serverID == 0 {
-		return
-	}
-
 	if *conflicts > 100 {
 		log.Fatalf("Conflicts percentage must be between 0 and 100.\n")
 	}
@@ -113,19 +109,20 @@ func main() {
 			go simulatedClientWriter(writer, lWriter /* leader writer*/, orInfo, *serverID)
 			go simulatedClientReader(lReader, orInfo, readings, *serverID)
 			go simulatedClientReader(reader, orInfo, readings, *serverID)
-		} else if *serverID == 0 {
-			// currently dials Virginia
-			follower, err := net.Dial("tcp", fmt.Sprintf("10.10.1.3:%d", serverPort))
-			if err != nil {
-				log.Fatalf("Error connecting to replica %s:%d\n", *leaderAddr, *leaderPort)
-			}
-
-			fReader := bufio.NewReader(follower)
-			fWriter := bufio.NewWriter(follower)
-
-			go simulatedClientWriter(writer, fWriter /* follower writer*/, orInfo, *serverID)
-			go simulatedClientReader(fReader, orInfo, readings, *serverID)
-			go simulatedClientReader(reader, orInfo, readings, *serverID)
+			//} else if *serverID == 0 {
+			//	// currently dials Virginia
+			//	follower, err := net.Dial("tcp", fmt.Sprintf("10.10.1.3:%d", serverPort))
+			//	if err != nil {
+			//		log.Fatalf("Error connecting to replica %s:%d\n", *leaderAddr, *leaderPort)
+			//	}
+			//
+			//	fReader := bufio.NewReader(follower)
+			//	fWriter := bufio.NewWriter(follower)
+			//
+			//	go simulatedClientWriter(writer, fWriter /* follower writer*/, orInfo, *serverID)
+			//	go simulatedClientReader(fReader, orInfo, readings, *serverID)
+			//	go simulatedClientReader(reader, orInfo, readings, *serverID)
+			//}
 		} else {
 			go simulatedClientWriter(writer, nil /* leader writer*/, orInfo, *serverID)
 			go simulatedClientReader(reader, orInfo, readings, *serverID)
@@ -211,10 +208,11 @@ func simulatedClientWriter(writer *bufio.Writer, otherWriter *bufio.Writer, orIn
 			otherWriter.WriteByte(genericsmrproto.PROPOSE)
 			args.Marshal(otherWriter)
 			otherWriter.Flush()
-		} else if args.Command.Op == state.GET && serverID == 0 { // send leader's reads to VA
-			otherWriter.WriteByte(genericsmrproto.PROPOSE)
-			args.Marshal(otherWriter)
-			otherWriter.Flush()
+			//} else if args.Command.Op == state.GET && serverID == 0 { // send leader's reads to VA
+			//	otherWriter.WriteByte(genericsmrproto.PROPOSE)
+			//	args.Marshal(otherWriter)
+			//	otherWriter.Flush()
+			//}
 		} else {
 			writer.WriteByte(genericsmrproto.PROPOSE)
 			args.Marshal(writer)
