@@ -207,7 +207,7 @@ func simulatedClientWriter(writer *bufio.Writer, otherWriter *bufio.Writer, orIn
 			otherWriter.WriteByte(genericsmrproto.PROPOSE)
 			args.Marshal(otherWriter)
 			otherWriter.Flush()
-		} else if args.Command.Op == state.PUT && serverID == 0 { // send leader's writes to VA
+		} else if args.Command.Op == state.GET && serverID == 0 { // send leader's reads to VA
 			otherWriter.WriteByte(genericsmrproto.PROPOSE)
 			args.Marshal(otherWriter)
 			otherWriter.Flush()
