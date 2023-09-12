@@ -109,6 +109,19 @@ func main() {
 			go simulatedClientWriter(writer, lWriter /* leader writer*/, orInfo, *serverID)
 			go simulatedClientReader(lReader, orInfo, readings, *serverID)
 			go simulatedClientReader(reader, orInfo, readings, *serverID)
+		} else if *serverID == 0 {
+			// currently dials Virginia
+			follower, err := net.Dial("tcp", fmt.Sprintf("10.10.1.3:%d", serverPort))
+			if err != nil {
+				log.Fatalf("Error connecting to replica %s:%d\n", *leaderAddr, *leaderPort)
+			}
+
+			fReader := bufio.NewReader(follower)
+			fWriter := bufio.NewWriter(follower)
+
+			go simulatedClientWriter(writer, fWriter /* follower writer*/, orInfo, *serverID)
+			go simulatedClientReader(fReader, orInfo, readings, *serverID)
+			go simulatedClientReader(reader, orInfo, readings, *serverID)
 		} else {
 			go simulatedClientWriter(writer, nil /* leader writer*/, orInfo, *serverID)
 			go simulatedClientReader(reader, orInfo, readings, *serverID)
@@ -126,7 +139,7 @@ func main() {
 	}
 }
 
-func simulatedClientWriter(writer *bufio.Writer, lWriter *bufio.Writer, orInfo *outstandingRequestInfo, serverID int) {
+func simulatedClientWriter(writer *bufio.Writer, otherWriter *bufio.Writer, orInfo *outstandingRequestInfo, serverID int) {
 	args := genericsmrproto.Propose{
 		CommandId: 0,
 		Command:   state.Command{Op: state.PUT, K: 0, V: 1},
@@ -191,9 +204,13 @@ func simulatedClientWriter(writer *bufio.Writer, lWriter *bufio.Writer, orInfo *
 
 		before := time.Now()
 		if args.Command.Op == state.RMW && serverID != 0 { // send RMWs to leader
-			lWriter.WriteByte(genericsmrproto.PROPOSE)
-			args.Marshal(lWriter)
-			lWriter.Flush()
+			otherWriter.WriteByte(genericsmrproto.PROPOSE)
+			args.Marshal(otherWriter)
+			otherWriter.Flush()
+		} else if args.Command.Op == state.PUT && serverID == 0 { // send leader's writes to VA
+			otherWriter.WriteByte(genericsmrproto.PROPOSE)
+			args.Marshal(otherWriter)
+			otherWriter.Flush()
 		} else {
 			writer.WriteByte(genericsmrproto.PROPOSE)
 			args.Marshal(writer)
