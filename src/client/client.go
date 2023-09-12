@@ -65,6 +65,10 @@ type outstandingRequestInfo struct {
 var orInfos []*outstandingRequestInfo
 
 func main() {
+	if *serverID == 0 {
+		return
+	}
+
 	flag.Parse()
 
 	runtime.GOMAXPROCS(*procs)
