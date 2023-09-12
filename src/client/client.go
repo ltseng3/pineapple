@@ -66,6 +66,7 @@ var orInfos []*outstandingRequestInfo
 
 func main() {
 	if *serverID == 0 {
+		time.Sleep(180 * time.Second)
 		return
 	}
 
