@@ -217,9 +217,6 @@ func (r *Replica) bcastGet(instance int32, write bool, key int) {
 		if !r.Alive[q] {
 			continue
 		}
-		if q == 0 { // don't send read/write messages to leader
-			continue
-		}
 
 		r.SendMsg(q, r.getRPC, args)
 	}
@@ -346,9 +343,6 @@ func (r *Replica) bcastSet(instance int32, write bool, key int, payload pineappl
 			break
 		}
 		if !r.Alive[q] {
-			continue
-		}
-		if q == 0 { // don't send read/write messages to leader
 			continue
 		}
 
