@@ -396,6 +396,7 @@ func (r *Replica) handleSetReply(setReply *pineappleproto.SetReply) {
 var pRMWGet pineappleproto.RMWGet
 
 func (r *Replica) bcastRMWGet(instance int32, ballot int32, command []state.Command) {
+	log.Println("sending rmw")
 	defer func() {
 		if err := recover(); err != nil {
 			log.Println("Accept bcast failed:", err)
