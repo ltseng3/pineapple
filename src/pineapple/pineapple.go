@@ -396,7 +396,6 @@ func (r *Replica) handleSetReply(setReply *pineappleproto.SetReply) {
 var pRMWGet pineappleproto.RMWGet
 
 func (r *Replica) bcastRMWGet(instance int32, ballot int32, command []state.Command) {
-	log.Println("sending rmw")
 	defer func() {
 		if err := recover(); err != nil {
 			log.Println("Accept bcast failed:", err)
@@ -578,6 +577,7 @@ func (r *Replica) handleRMWSetReply(rmwSetReply *pineappleproto.RMWSetReply) {
 	if inst.lb.rmwSetOKs+1 > r.N>>1 {
 		r.pendingRMWs[inst.rmwId] = inst
 		r.rmwDoneUpTo++
+		log.Println(inst.rmwId, r.rmwDoneUpTo)
 	}
 
 }
@@ -588,8 +588,10 @@ func (r *Replica) executeRMWs() {
 		executed := false
 
 		for i <= r.rmwDoneUpTo {
+			log.Println("this works")
 			inst := r.pendingRMWs[i]
 			if inst.lb.clientProposals != nil && r.Dreply && !inst.lb.completed {
+				log.Println("replying to rmw")
 				propreply := &genericsmrproto.ProposeReplyTS{
 					OK:        TRUE,
 					CommandId: inst.lb.clientProposals[0].CommandId,
