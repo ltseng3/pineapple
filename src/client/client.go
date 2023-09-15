@@ -134,13 +134,9 @@ func main() {
 		printer(readings)
 	}
 }
-
-func simulatedClientWriter(writer *bufio.Writer, otherWriter *bufio.Writer, orInfo *outstandingRequestInfo, serverID int) {
-	args := genericsmrproto.Propose{
-		CommandId: 0,
-		Command:   state.Command{Op: state.PUT, K: 0, V: 1},
-		Timestamp: 0,
-	} // @audit autodetermine proposal type
+func simulatedClientWriter(writer *bufio.Writer, lWriter *bufio.Writer, orInfo *outstandingRequestInfo, serverID int) {
+	args := genericsmrproto.Propose{0 /* id */, state.Command{state.PUT, 0, 1}, 0 /* timestamp */}
+	//args := genericsmrproto.Propose{0, state.Command{state.PUT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0}
 
 	conflictRand := rand.New(rand.NewSource(time.Now().UnixNano()))
 	zipf := zipfian.NewZipfianGenerator(*zKeys, *theta)
@@ -148,8 +144,7 @@ func simulatedClientWriter(writer *bufio.Writer, otherWriter *bufio.Writer, orIn
 	opRand := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	queuedReqs := 0 // The number of poisson departures that have been missed
-
-	for id := int32(0); ; id++ {
+	for id := int32(0); id < 10000; id++ {
 		args.CommandId = id
 
 		// Determine key
@@ -181,6 +176,11 @@ func simulatedClientWriter(writer *bufio.Writer, otherWriter *bufio.Writer, orIn
 			args.Command.Op = state.GET // read operation
 		}
 
+		// somehow if leader has a read, the throughput is terrible...
+		//if serverID == 0 {
+		//	args.Command.Op = state.PUT
+		//}
+
 		if *poissonAvg != -1 {
 			time.Sleep(poissonGenerator.NextArrival())
 			queuedReqs += 1
@@ -188,42 +188,39 @@ func simulatedClientWriter(writer *bufio.Writer, otherWriter *bufio.Writer, orIn
 
 		before := time.Now()
 		if args.Command.Op == state.RMW && serverID != 0 { // send RMWs to leader
-			otherWriter.WriteByte(genericsmrproto.PROPOSE)
-			args.Marshal(otherWriter)
-			otherWriter.Flush()
-			//} else if args.Command.Op == state.GET && serverID == 0 { // send leader's reads to VA
-			//	otherWriter.WriteByte(genericsmrproto.PROPOSE)
-			//	args.Marshal(otherWriter)
-			//	otherWriter.Flush()
-			//}
+			lWriter.WriteByte(genericsmrproto.PROPOSE)
+			args.Marshal(lWriter)
+			//lWriter.Flush()
 		} else {
 			writer.WriteByte(genericsmrproto.PROPOSE)
 			args.Marshal(writer)
-			writer.Flush()
+			//writer.Flush()
 		}
 
 		orInfo.Lock()
-		orInfo.operation[id] = args.Command.Op
-		orInfo.startTimes[id] = before
+		orInfo.operation[args.CommandId] = args.Command.Op
+		orInfo.startTimes[args.CommandId] = before
 		orInfo.Unlock()
 	}
+
+	if serverID != 0 {
+		lWriter.Flush()
+	}
+	writer.Flush()
+
 }
 
 func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo, readings chan *response, leader int) {
 	var reply genericsmrproto.ProposeReplyTS
 
 	for {
+		time.Sleep(1 * time.Millisecond)
 		if err := reply.Unmarshal(reader); err != nil || reply.OK == 0 {
-			if err != nil {
-				log.Println("Error during unmarshaling:", err)
-			} else if reply.OK == 0 {
-				log.Println("reply.OK is 0")
-			}
 			log.Println(reply.OK)
 			log.Println(reply.CommandId)
+			log.Println("Error when reading:", err)
 			break
 		}
-
 		after := time.Now()
 
 		orInfo.Lock()
@@ -235,14 +232,12 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 		rtt := (after.Sub(before)).Seconds() * 1000
 		//commitToExec := float64(reply.Timestamp) / 1e6
 		commitLatency := float64(0) //rtt - commitToExec
-
 		readings <- &response{
 			after,
 			rtt,
 			commitLatency,
 			operation,
-			leader,
-		}
+			leader}
 	}
 }
 
