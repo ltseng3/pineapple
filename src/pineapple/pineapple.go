@@ -570,6 +570,9 @@ func (r *Replica) handleRMWSet(rmwSet *pineappleproto.RMWSet) {
 // Response handler for Set request on nodes
 func (r *Replica) handleRMWSetReply(rmwSetReply *pineappleproto.RMWSetReply) {
 	inst := r.instanceSpace[rmwSetReply.Instance]
+	if inst.rmwId <= r.rmwDoneUpTo { // quorum of response already received
+		return
+	}
 
 	inst.lb.rmwSetOKs++
 
@@ -722,7 +725,13 @@ func (r *Replica) Run() {
 
 	go r.WaitForClientConnections()
 
-	go r.executeRMWs()
+	if r.Id == 0 {
+		r.IsLeader = true
+	}
+
+	if r.IsLeader {
+		go r.executeRMWs()
+	}
 
 	clockChan = make(chan bool, 1)
 	go r.clock()
