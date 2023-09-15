@@ -726,10 +726,6 @@ func (r *Replica) Run() {
 	go r.WaitForClientConnections()
 
 	if r.Id == 0 {
-		r.IsLeader = true
-	}
-
-	if r.IsLeader {
 		go r.executeRMWs()
 	}
 
