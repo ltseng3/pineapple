@@ -287,7 +287,7 @@ func (r *Replica) handleGetReply(getReply *pineappleproto.GetReply) {
 				if reply.Payload.Tag == firstReceivedTag {
 					identicalCount++
 				}
-				if reply.Payload.Tag == ownTag {
+				if reply.Payload.Tag == ownTag && getReply.Write == 0 {
 					// replica has the biggest tag already, do not send tag in 2nd phase
 					r.instanceSpace[getReply.Instance].lb.hasMaxTag[reply.ReplicaID] = true
 				}
@@ -383,7 +383,8 @@ func (r *Replica) handleSetReply(setReply *pineappleproto.SetReply) {
 	inst.lb.setOKs++
 
 	// Wait for a majority of acknowledgements
-	if (inst.lb.setOKs+1 > len(inst.lb.hasMaxTag) && len(inst.lb.hasMaxTag) < r.N>>1) ||
+	// Either wait for a quorum or for the number of replicas messages, whichever is smaller
+	if (inst.lb.setOKs+1 > len(inst.lb.hasMaxTag) && len(inst.lb.hasMaxTag) < r.N>>1 && len(inst.lb.hasMaxTag) > 0) ||
 		inst.lb.setOKs+1 > r.N>>1 {
 		r.replyClient(setReply.Instance)
 	}
