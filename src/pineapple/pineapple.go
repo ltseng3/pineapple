@@ -721,6 +721,8 @@ func (r *Replica) Run() {
 
 	go r.WaitForClientConnections()
 
+	go r.executeRMWs()
+
 	clockChan = make(chan bool, 1)
 	go r.clock()
 
