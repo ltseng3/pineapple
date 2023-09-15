@@ -59,13 +59,17 @@ type Replica struct {
 	defaultBallot int32       // default ballot for new instances (0 until a Prepare(ballot, instance->infinity) from a leader)
 	crtInstance   int32       // highest used instance number that this replica knows about
 
-	flush         bool
-	committedUpTo int32
+	flush bool
+
+	crtRmwId    int32       // highest id of RMW started
+	rmwDoneUpTo int32       // latest RMW done
+	pendingRMWs []*Instance // ids of RMWs pending
 }
 
 type Instance struct {
 	cmds            []state.Command
 	initialTag      pineappleproto.Tag
+	rmwId           int32
 	receivedRMW     pineappleproto.Payload
 	receivedData    []*pineappleproto.GetReply
 	receivedRMWData []pineappleproto.Payload
@@ -119,6 +123,8 @@ func NewReplica(id int, peerAddrList []string, exec bool, dreply bool) *Replica 
 
 		false,
 		0,
+		-1,
+		make([]*Instance, 20*1024*1024),
 	}
 
 	// ABD
@@ -569,17 +575,35 @@ func (r *Replica) handleRMWSetReply(rmwSetReply *pineappleproto.RMWSetReply) {
 
 	// Wait for a majority of acknowledgements
 	if inst.lb.rmwSetOKs+1 > r.N>>1 {
-		if inst.lb.clientProposals != nil && r.Dreply && !inst.lb.completed {
-			propreply := &genericsmrproto.ProposeReplyTS{
-				OK:        TRUE,
-				CommandId: inst.lb.clientProposals[0].CommandId,
-				Value:     state.NIL,
-				Timestamp: inst.lb.clientProposals[0].Timestamp}
-			inst.lb.completed = true
-			r.ReplyProposeTS(propreply, inst.lb.clientProposals[0].Reply)
-		}
+		r.rmwDoneUpTo++
+		r.pendingRMWs[inst.rmwId] = inst
 	}
 
+}
+
+func (r *Replica) executeRMWs() {
+	i := int32(0)
+	for !r.Shutdown {
+		executed := false
+
+		for i <= r.rmwDoneUpTo {
+			inst := r.pendingRMWs[i]
+			if inst.lb.clientProposals != nil && r.Dreply && !inst.lb.completed {
+				propreply := &genericsmrproto.ProposeReplyTS{
+					OK:        TRUE,
+					CommandId: inst.lb.clientProposals[0].CommandId,
+					Value:     state.NIL,
+					Timestamp: inst.lb.clientProposals[0].Timestamp}
+				inst.lb.completed = true
+				r.ReplyProposeTS(propreply, inst.lb.clientProposals[0].Reply)
+			}
+			executed = true
+		}
+
+		if !executed {
+			time.Sleep(CLOCK)
+		}
+	}
 }
 
 func (r *Replica) handlePropose(propose *genericsmr.Propose) {
@@ -610,7 +634,10 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 
 	// Use Paxos if operation is not Read / Write
 	if propose.Command.Op != state.PUT && propose.Command.Op != state.GET {
+		rmwId := r.crtRmwId
+		r.crtRmwId++
 		r.instanceSpace[instNo] = &Instance{
+			rmwId:  rmwId,
 			cmds:   cmds,
 			ballot: 0,
 			status: PREPARING,
@@ -637,12 +664,12 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 
 var clockChan chan bool
 
-func (r *Replica) updateCommittedUpTo() {
-	for r.instanceSpace[r.committedUpTo+1] != nil &&
-		r.instanceSpace[r.committedUpTo+1].status == COMMITTED {
-		r.committedUpTo++
-	}
-}
+//func (r *Replica) updateCommittedUpTo() {
+//	for r.instanceSpace[r.committedUpTo+1] != nil &&
+//		r.instanceSpace[r.committedUpTo+1].status == COMMITTED {
+//		r.committedUpTo++
+//	}
+//}
 
 // append a log entry to stable storage
 func (r *Replica) recordInstanceMetadata(inst *Instance) {
