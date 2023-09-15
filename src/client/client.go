@@ -109,20 +109,6 @@ func main() {
 			go simulatedClientWriter(writer, lWriter /* leader writer*/, orInfo, *serverID)
 			go simulatedClientReader(lReader, orInfo, readings, *serverID)
 			go simulatedClientReader(reader, orInfo, readings, *serverID)
-			//} else if *serverID == 0 {
-			//	// currently dials Virginia
-			//	follower, err := net.Dial("tcp", fmt.Sprintf("10.10.1.3:%d", serverPort))
-			//	if err != nil {
-			//		log.Fatalf("Error connecting to replica %s:%d\n", *leaderAddr, *leaderPort)
-			//	}
-			//
-			//	fReader := bufio.NewReader(follower)
-			//	fWriter := bufio.NewWriter(follower)
-			//
-			//	go simulatedClientWriter(writer, fWriter /* follower writer*/, orInfo, *serverID)
-			//	go simulatedClientReader(fReader, orInfo, readings, *serverID)
-			//	go simulatedClientReader(reader, orInfo, readings, *serverID)
-			//}
 		} else {
 			go simulatedClientWriter(writer, nil /* leader writer*/, orInfo, *serverID)
 			go simulatedClientReader(reader, orInfo, readings, *serverID)
