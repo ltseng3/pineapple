@@ -575,8 +575,8 @@ func (r *Replica) handleRMWSetReply(rmwSetReply *pineappleproto.RMWSetReply) {
 
 	// Wait for a majority of acknowledgements
 	if inst.lb.rmwSetOKs+1 > r.N>>1 {
-		r.rmwDoneUpTo++
 		r.pendingRMWs[inst.rmwId] = inst
+		r.rmwDoneUpTo++
 	}
 
 }
