@@ -37,6 +37,7 @@ var zKeys = flag.Uint64("z", 1e9, "Number of unique keys in zipfian distribution
 var poissonAvg = flag.Int("poisson", -1, "The average number of microseconds between requests. -1 disables Poisson.")
 var percentWrites = flag.Float64("writes", 1, "A float between 0 and 1 that corresponds to the percentage of requests that should be writes. The remainder will be reads.")
 var percentRMWs = flag.Float64("rmws", 0, "A float between 0 and 1 that corresponds to the percentage of writes that should be RMWs. The remainder will be regular writes.")
+var tailAtScale *int = flag.Int("tailAtScale", -1, "Simulate storage request fan-out by performing <tailAtScale> requests and aggregating statistics.")
 var blindWrites = flag.Bool("blindwrites", false, "True if writes don't need to execute before clients receive responses.")
 var singleClusterTest = flag.Bool("singleClusterTest", true, "True if clients run on a VM in a single cluster")
 var rampDown *int = flag.Int("rampDown", 5, "Length of the cool-down period after statistics are measured (in seconds).")
@@ -56,13 +57,24 @@ type response struct {
 // yet received responses
 type outstandingRequestInfo struct {
 	sync.Mutex
-	sema       *semaphore.Weighted // Controls number of outstanding operations
-	startTimes map[int32]time.Time // The time at which operations were sent out
-	operation  map[int32]state.Operation
+	sema        *semaphore.Weighted // Controls number of outstanding operations
+	startTimes  map[int32]time.Time // The time at which operations were sent out
+	operation   map[int32]state.Operation
+	tasBatch    map[int32]int32   // tasBatch id of the request
+	maxLat      map[int32]float64 // max latency of the tail at scale requests
+	tasRecevied map[int32]int     // how many of the tas requests have been received
 }
 
 // An outstandingRequestInfo per client thread
 var orInfos []*outstandingRequestInfo
+
+func Max(a float64, b float64) float64 {
+	if a > b {
+		return a
+	} else {
+		return b
+	}
+}
 
 func main() {
 	flag.Parse()
@@ -91,11 +103,17 @@ func main() {
 		reader := bufio.NewReader(server)
 		writer := bufio.NewWriter(server)
 
+		// TODO: init maps
 		orInfo := &outstandingRequestInfo{
 			sync.Mutex{},
 			semaphore.NewWeighted(*outstandingReqs),
 			make(map[int32]time.Time, *outstandingReqs),
-			make(map[int32]state.Operation, *outstandingReqs)}
+			make(map[int32]state.Operation, *outstandingReqs),
+
+			make(map[int32]int32),
+			make(map[int32]float64),
+			make(map[int32]int),
+		}
 
 		if *serverID != 0 && *percentRMWs != 0 { // not already connected to leader
 			leader, err := net.Dial("tcp", fmt.Sprintf("%s:%d", *leaderAddr, *leaderPort))
@@ -140,75 +158,86 @@ func simulatedClientWriter(writer *bufio.Writer, otherWriter *bufio.Writer, orIn
 
 	queuedReqs := 0 // The number of poisson departures that have been missed
 
+	coalescedOps := *tailAtScale // number of operations done in a batch
+	if coalescedOps == -1 {
+		coalescedOps = 1
+	}
+	tasBatch := int32(0) // id of all the sub-requests in a tail at scale batch
+
 	for id := int32(0); ; id++ {
-		args.CommandId = id
+		for i := 0; i < coalescedOps; i++ {
+			id += int32(i)
+			args.CommandId = id
 
-		// Determine key
-		if *conflicts >= 0 {
-			r := conflictRand.Intn(100)
-			if r < *conflicts {
-				args.Command.K = 42
-			} else {
-				//args.Command.K = state.Key(*startRange + 43 + int(id % 888))
-				args.Command.K = state.Key(int32(*startRange) + 43 + id)
-			}
-		} else {
-			args.Command.K = state.Key(zipf.NextNumber())
-		}
-
-		// Determine operation type
-		randNumber := opRand.Float64()
-		if *percentWrites+*percentRMWs > randNumber {
-			if *percentWrites > randNumber {
-				if !*blindWrites {
-					args.Command.Op = state.PUT // write operation
+			// Determine key
+			if *conflicts >= 0 {
+				r := conflictRand.Intn(100)
+				if r < *conflicts {
+					args.Command.K = 42
 				} else {
-					//args.Command.Op = state.PUT_BLIND
+					//args.Command.K = state.Key(*startRange + 43 + int(id % 888))
+					args.Command.K = state.Key(int32(*startRange) + 43 + id)
 				}
-			} else if *percentRMWs > 0 {
-				args.Command.Op = state.RMW // RMW operation
+			} else {
+				args.Command.K = state.Key(zipf.NextNumber())
 			}
-		} else {
-			args.Command.Op = state.GET // read operation
-		}
 
-		if *poissonAvg == -1 { // Poisson disabled
-			orInfo.sema.Acquire(context.Background(), 1)
-		} else {
-			for {
-				if orInfo.sema.TryAcquire(1) {
-					if queuedReqs == 0 {
-						time.Sleep(poissonGenerator.NextArrival())
+			// Determine operation type
+			randNumber := opRand.Float64()
+			if *percentWrites+*percentRMWs > randNumber {
+				if *percentWrites > randNumber {
+					if !*blindWrites {
+						args.Command.Op = state.PUT // write operation
 					} else {
-						queuedReqs -= 1
+						//args.Command.Op = state.PUT_BLIND
 					}
-					break
+				} else if *percentRMWs > 0 {
+					args.Command.Op = state.RMW // RMW operation
 				}
-				time.Sleep(poissonGenerator.NextArrival())
-				queuedReqs += 1
+			} else {
+				args.Command.Op = state.GET // read operation
 			}
-		}
 
-		before := time.Now()
-		if args.Command.Op == state.RMW && serverID != 0 { // send RMWs to leader
-			otherWriter.WriteByte(genericsmrproto.PROPOSE)
-			args.Marshal(otherWriter)
-			otherWriter.Flush()
-			//} else if args.Command.Op == state.GET && serverID == 0 { // send leader's reads to VA
-			//	otherWriter.WriteByte(genericsmrproto.PROPOSE)
-			//	args.Marshal(otherWriter)
-			//	otherWriter.Flush()
-			//}
-		} else {
-			writer.WriteByte(genericsmrproto.PROPOSE)
-			args.Marshal(writer)
-			writer.Flush()
-		}
+			if *poissonAvg == -1 { // Poisson disabled
+				orInfo.sema.Acquire(context.Background(), 1)
+			} else {
+				for {
+					if orInfo.sema.TryAcquire(1) {
+						if queuedReqs == 0 {
+							time.Sleep(poissonGenerator.NextArrival())
+						} else {
+							queuedReqs -= 1
+						}
+						break
+					}
+					time.Sleep(poissonGenerator.NextArrival())
+					queuedReqs += 1
+				}
+			}
 
-		orInfo.Lock()
-		orInfo.operation[id] = args.Command.Op
-		orInfo.startTimes[id] = before
-		orInfo.Unlock()
+			before := time.Now()
+			if args.Command.Op == state.RMW && serverID != 0 { // send RMWs to leader
+				otherWriter.WriteByte(genericsmrproto.PROPOSE)
+				args.Marshal(otherWriter)
+				otherWriter.Flush()
+				//} else if args.Command.Op == state.GET && serverID == 0 { // send leader's reads to VA
+				//	otherWriter.WriteByte(genericsmrproto.PROPOSE)
+				//	args.Marshal(otherWriter)
+				//	otherWriter.Flush()
+				//}
+			} else {
+				writer.WriteByte(genericsmrproto.PROPOSE)
+				args.Marshal(writer)
+				writer.Flush()
+			}
+
+			orInfo.Lock()
+			orInfo.operation[id] = args.Command.Op
+			orInfo.startTimes[id] = before
+			orInfo.tasBatch[id] = tasBatch
+			orInfo.Unlock()
+		}
+		tasBatch++
 	}
 }
 
@@ -233,19 +262,29 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 		orInfo.Lock()
 		before := orInfo.startTimes[reply.CommandId]
 		operation := orInfo.operation[reply.CommandId]
+		rtt := (after.Sub(before)).Seconds() * 1000
 		delete(orInfo.startTimes, reply.CommandId)
+
+		tasBatch := orInfo.tasBatch[reply.CommandId]
+		orInfo.tasRecevied[tasBatch]++ // keep track of how many sub-requests have been received
+		tasReceived := orInfo.tasRecevied[tasBatch]
+
+		orInfo.maxLat[tasBatch] = Max(orInfo.maxLat[tasBatch], rtt) // keep track of largest latency
+		maxLat := orInfo.maxLat[tasBatch]
+		// TODO: tas logic
 		orInfo.Unlock()
 
-		rtt := (after.Sub(before)).Seconds() * 1000
 		//commitToExec := float64(reply.Timestamp) / 1e6
 		commitLatency := float64(0) //rtt - commitToExec
 
-		readings <- &response{
-			after,
-			rtt,
-			commitLatency,
-			operation,
-			leader,
+		if tasReceived == *tailAtScale || *tailAtScale == -1 {
+			readings <- &response{
+				after,
+				maxLat,
+				commitLatency,
+				operation,
+				leader,
+			}
 		}
 	}
 }
