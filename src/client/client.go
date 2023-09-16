@@ -291,9 +291,7 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 		if tasReceived == *tailAtScale || *tailAtScale == -1 {
 			for i, lat := range maxLat {
 				if lat != 0 {
-					if i == 0 { // Max
-						// TODO: where to put max ?
-					} else if i == 1 { // write operation
+					if i == 0 { // write operation
 						readings <- &response{
 							after,
 							lat,
@@ -301,7 +299,7 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 							state.PUT,
 							leader,
 						}
-					} else if i == 2 { // read operation
+					} else if i == 1 { // read operation
 						readings <- &response{
 							after,
 							lat,
@@ -309,7 +307,7 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 							state.GET,
 							leader,
 						}
-					} else { // rmw operation
+					} else if i == 2 { // rmw operation
 						readings <- &response{
 							after,
 							lat,
@@ -317,6 +315,8 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 							state.RMW,
 							leader,
 						}
+					} else { // max
+						// TODO: where to put max ?
 					}
 				}
 			}
