@@ -60,9 +60,9 @@ type outstandingRequestInfo struct {
 	sema        *semaphore.Weighted // Controls number of outstanding operations
 	startTimes  map[int32]time.Time // The time at which operations were sent out
 	operation   map[int32]state.Operation
-	tasBatch    map[int32]int32   // tasBatch id of the request
-	maxLat      map[int32]float64 // max latency of the tail at scale requests
-	tasRecevied map[int32]int     // how many of the tas requests have been received
+	tasBatch    map[int32]int32     // tasBatch id of the request
+	maxLat      map[int32][]float64 // max latency of the tail at scale requests
+	tasRecevied map[int32]int       // how many of the tas requests have been received
 }
 
 // An outstandingRequestInfo per client thread
@@ -111,7 +111,7 @@ func main() {
 			make(map[int32]state.Operation, *outstandingReqs),
 
 			make(map[int32]int32),
-			make(map[int32]float64),
+			make(map[int32][]float64),
 			make(map[int32]int),
 		}
 
@@ -268,22 +268,57 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 		tasBatch := orInfo.tasBatch[reply.CommandId]
 		orInfo.tasRecevied[tasBatch]++ // keep track of how many sub-requests have been received
 		tasReceived := orInfo.tasRecevied[tasBatch]
+		if len(orInfo.maxLat[tasBatch]) == 0 {
+			orInfo.maxLat[tasBatch] = make([]float64, 4)
+		}
 
-		orInfo.maxLat[tasBatch] = Max(orInfo.maxLat[tasBatch], rtt) // keep track of largest latency
+		orInfo.maxLat[tasBatch][3] = Max(orInfo.maxLat[tasBatch][3], rtt) // keep track of largest latency
+		if operation == state.PUT {
+			orInfo.maxLat[tasBatch][0] = Max(orInfo.maxLat[tasBatch][0], rtt) // first element is largest write lat
+		} else if operation == state.GET {
+			orInfo.maxLat[tasBatch][1] = Max(orInfo.maxLat[tasBatch][1], rtt) // second element is largest read lat
+		} else { // rmw
+			orInfo.maxLat[tasBatch][2] = Max(orInfo.maxLat[tasBatch][2], rtt) // third element is largest rmw lat
+		}
 		maxLat := orInfo.maxLat[tasBatch]
-		// TODO: tas logic
+
 		orInfo.Unlock()
 
 		//commitToExec := float64(reply.Timestamp) / 1e6
 		commitLatency := float64(0) //rtt - commitToExec
 
+		// check if all sub-request responses received
 		if tasReceived == *tailAtScale || *tailAtScale == -1 {
-			readings <- &response{
-				after,
-				maxLat,
-				commitLatency,
-				operation,
-				leader,
+			for i, lat := range maxLat {
+				if lat != 0 {
+					if i == 0 { // Max
+						// TODO: where to put max ?
+					} else if i == 1 { // write operation
+						readings <- &response{
+							after,
+							lat,
+							commitLatency,
+							state.PUT,
+							leader,
+						}
+					} else if i == 2 { // read operation
+						readings <- &response{
+							after,
+							lat,
+							commitLatency,
+							state.GET,
+							leader,
+						}
+					} else { // rmw operation
+						readings <- &response{
+							after,
+							lat,
+							commitLatency,
+							state.RMW,
+							leader,
+						}
+					}
+				}
 			}
 		}
 	}
