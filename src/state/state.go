@@ -14,6 +14,7 @@ const (
 	PUT
 	GET
 	RMW
+	MAX
 	DELETE
 	RLOCK
 	WLOCK

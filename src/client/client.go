@@ -316,7 +316,13 @@ func simulatedClientReader(reader *bufio.Reader, orInfo *outstandingRequestInfo,
 							leader,
 						}
 					} else { // max
-						// TODO: where to put max ?
+						readings <- &response{
+							after,
+							lat,
+							commitLatency,
+							state.MAX,
+							leader,
+						}
 					}
 				}
 			}
@@ -409,6 +415,13 @@ func printerMultipleFile(readings chan *response, replicaID int, experimentStart
 		return
 	}
 
+	fileName = fmt.Sprintf("tasMAX-%d.txt", replicaID)
+	latFileMAX, err := os.Create(fileName)
+	if err != nil {
+		log.Println("Error creating latency file", err)
+		return
+	}
+
 	startTime := time.Now()
 
 	for {
@@ -427,8 +440,10 @@ func printerMultipleFile(readings chan *response, replicaID int, experimentStart
 					latFileRead.WriteString(fmt.Sprintf("%d %f %f\n", resp.receivedAt.UnixNano(), resp.rtt, resp.commitLatency))
 				} else if resp.operation == state.PUT {
 					latFileWrite.WriteString(fmt.Sprintf("%d %f %f\n", resp.receivedAt.UnixNano(), resp.rtt, resp.commitLatency))
-				} else { // rmw
+				} else if resp.operation == state.RMW { // rmw
 					latFileRMW.WriteString(fmt.Sprintf("%d %f %f\n", resp.receivedAt.UnixNano(), resp.rtt, resp.commitLatency))
+				} else { // max
+					latFileMAX.WriteString(fmt.Sprintf("%d %f %f\n", resp.receivedAt.UnixNano(), resp.rtt, resp.commitLatency))
 				}
 				sum += resp.rtt
 				commitSum += resp.commitLatency
