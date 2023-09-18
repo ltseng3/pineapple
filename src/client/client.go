@@ -415,7 +415,7 @@ func printerMultipleFile(readings chan *response, replicaID int, experimentStart
 		return
 	}
 
-	fileName = fmt.Sprintf("tasMAX-%d.txt", replicaID)
+	fileName = fmt.Sprintf("latFileMAX-%d.txt", replicaID)
 	latFileMAX, err := os.Create(fileName)
 	if err != nil {
 		log.Println("Error creating latency file", err)
