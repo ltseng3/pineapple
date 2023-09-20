@@ -452,7 +452,7 @@ func printerMultipleFile(readings chan *response, replicaID int, experimentStart
 				} else if resp.operation == state.RMW { // rmw
 					latFileRMW.WriteString(fmt.Sprintf("%d %f %f\n", resp.receivedAt.UnixNano(), resp.rtt, resp.commitLatency))
 				} else { // max
-					latFileMAX.WriteString(fmt.Sprintf("%d %f %f\n", resp.receivedAt.UnixNano(), resp.rtt, resp.commitLatency))
+					latFileMAX.WriteString(fmt.Sprintf("%d %f %f\n", resp.receivedAt.UnixNano(), resp.commitLatency, resp.rtt))
 				}
 				sum += resp.rtt
 				commitSum += resp.commitLatency
