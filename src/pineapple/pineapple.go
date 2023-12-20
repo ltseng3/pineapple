@@ -665,13 +665,6 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 
 var clockChan chan bool
 
-//func (r *Replica) updateCommittedUpTo() {
-//	for r.instanceSpace[r.committedUpTo+1] != nil &&
-//		r.instanceSpace[r.committedUpTo+1].status == COMMITTED {
-//		r.committedUpTo++
-//	}
-//}
-
 // append a log entry to stable storage
 func (r *Replica) recordInstanceMetadata(inst *Instance) {
 	if !r.Durable {

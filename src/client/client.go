@@ -114,9 +114,6 @@ func main() {
 			go simulatedClientReader(reader, orInfo, readings, *serverID)
 		}
 
-		//waitTime := startTime.Intn(3)
-		//time.Sleep(time.Duration(waitTime) * 100 * 1e6)
-
 		orInfos[i] = orInfo
 	}
 	if *singleClusterTest {
@@ -194,11 +191,6 @@ func simulatedClientWriter(writer *bufio.Writer, otherWriter *bufio.Writer, orIn
 			otherWriter.WriteByte(genericsmrproto.PROPOSE)
 			args.Marshal(otherWriter)
 			otherWriter.Flush()
-			//} else if args.Command.Op == state.GET && serverID == 0 { // send leader's reads to VA
-			//	otherWriter.WriteByte(genericsmrproto.PROPOSE)
-			//	args.Marshal(otherWriter)
-			//	otherWriter.Flush()
-			//}
 		} else {
 			writer.WriteByte(genericsmrproto.PROPOSE)
 			args.Marshal(writer)
@@ -378,8 +370,6 @@ func printerMultipleFile(readings chan *response, replicaID int, experimentStart
 			orInfos[i].Unlock()
 		}
 
-		// Log summary to lattput file
-		//lattputFile.WriteString(fmt.Sprintf("%d %f %f %d %d %f\n", endTime.UnixNano(), avg, tput, count, totalOrs, avgCommit))
 		// Log all to latency file if they are not within the ramp up or ramp down period.
 		if *rampUp < int(currentRuntime.Seconds()) && int(currentRuntime.Seconds()) < *timeout-*rampDown {
 			lattputFile.WriteString(fmt.Sprintf("%d %f %f %d %d %f\n", endTime.UnixNano(), avg, tput, count, totalOrs, avgCommit))
