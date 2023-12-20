@@ -223,9 +223,6 @@ func (r *Replica) bcastGet(instance int32, write bool, key int) {
 		if !r.Alive[q] {
 			continue
 		}
-		//if q == 0 { // don't send read/write messages to leader
-		//	continue
-		//}
 
 		r.SendMsg(q, r.getRPC, args)
 	}
@@ -354,9 +351,6 @@ func (r *Replica) bcastSet(instance int32, write bool, key int, payload pineappl
 		if !r.Alive[q] {
 			continue
 		}
-		//if q == 0 { // don't send read/write messages to leader
-		//	continue
-		//}
 
 		if !write {
 			// don't message replicas that already have the largest tag
@@ -665,13 +659,6 @@ func (r *Replica) handlePropose(propose *genericsmr.Propose) {
 }
 
 var clockChan chan bool
-
-//func (r *Replica) updateCommittedUpTo() {
-//	for r.instanceSpace[r.committedUpTo+1] != nil &&
-//		r.instanceSpace[r.committedUpTo+1].status == COMMITTED {
-//		r.committedUpTo++
-//	}
-//}
 
 // append a log entry to stable storage
 func (r *Replica) recordInstanceMetadata(inst *Instance) {

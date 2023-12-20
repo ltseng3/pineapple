@@ -73,7 +73,6 @@ func main() {
 
 	readings := make(chan *response, 100000)
 
-	//startTime := rand.New(rand.NewSource(time.Now().UnixNano()))
 	experimentStart := time.Now()
 
 	for i := 0; i < *T; i++ {
@@ -104,20 +103,6 @@ func main() {
 			go simulatedClientWriter(writer, lWriter /* leader writer*/, orInfo, *serverID)
 			go simulatedClientReader(lReader, orInfo, readings, *serverID)
 			go simulatedClientReader(reader, orInfo, readings, *serverID)
-			//} else if *serverID == 0 {
-			//	// currently dials Virginia
-			//	follower, err := net.Dial("tcp", fmt.Sprintf("10.10.1.3:%d", serverPort))
-			//	if err != nil {
-			//		log.Fatalf("Error connecting to replica %s:%d\n", *leaderAddr, *leaderPort)
-			//	}
-			//
-			//	fReader := bufio.NewReader(follower)
-			//	fWriter := bufio.NewWriter(follower)
-			//
-			//	go simulatedClientWriter(writer, fWriter /* follower writer*/, orInfo, *serverID)
-			//	go simulatedClientReader(fReader, orInfo, readings, *serverID)
-			//	go simulatedClientReader(reader, orInfo, readings, *serverID)
-			//}
 		} else {
 			go simulatedClientWriter(writer, nil /* leader writer*/, orInfo, *serverID)
 			go simulatedClientReader(reader, orInfo, readings, *serverID)
@@ -135,8 +120,11 @@ func main() {
 	}
 }
 func simulatedClientWriter(writer *bufio.Writer, lWriter *bufio.Writer, orInfo *outstandingRequestInfo, serverID int) {
-	args := genericsmrproto.Propose{0 /* id */, state.Command{state.PUT, 0, 1}, 0 /* timestamp */}
-	//args := genericsmrproto.Propose{0, state.Command{state.PUT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0}
+	args := genericsmrproto.Propose{
+		CommandId: 0,
+		Command:   state.Command{Op: state.PUT, K: 0, V: 1},
+		Timestamp: 0,
+	}
 
 	conflictRand := rand.New(rand.NewSource(time.Now().UnixNano()))
 	zipf := zipfian.NewZipfianGenerator(*zKeys, *theta)
@@ -166,9 +154,7 @@ func simulatedClientWriter(writer *bufio.Writer, lWriter *bufio.Writer, orInfo *
 			if *percentWrites > randNumber {
 				if !*blindWrites {
 					args.Command.Op = state.PUT // write operation
-				} else {
-					//args.Command.Op = state.PUT_BLIND
-				}
+				} // no support for blind writes
 			} else if *percentRMWs > 0 {
 				args.Command.Op = state.RMW // RMW operation
 			}
@@ -247,14 +233,12 @@ func printer(readings chan *response) {
 		log.Println("Error creating lattput file", err)
 		return
 	}
-	//lattputFile.WriteString("# time (ns), avg lat over the past second, tput since last line, total count, totalOrs, avg commit lat over the past second\n")
 
 	latFile, err := os.Create("latency.txt")
 	if err != nil {
 		log.Println("Error creating latency file", err)
 		return
 	}
-	//latFile.WriteString("# time (ns), latency, commit latency\n")
 
 	startTime := time.Now()
 
@@ -310,7 +294,6 @@ func printerMultipleFile(readings chan *response, replicaID int, experimentStart
 		log.Println("Error creating latency file", err)
 		return
 	}
-	//latFile.WriteString("# time (ns), latency, commit latency\n")
 
 	fileName = fmt.Sprintf("latFileWrite-%d.txt", replicaID)
 	latFileWrite, err := os.Create(fileName)
@@ -369,8 +352,6 @@ func printerMultipleFile(readings chan *response, replicaID int, experimentStart
 			orInfos[i].Unlock()
 		}
 
-		// Log summary to lattput file
-		//lattputFile.WriteString(fmt.Sprintf("%d %f %f %d %d %f\n", endTime.UnixNano(), avg, tput, count, totalOrs, avgCommit))
 		// Log all to latency file if they are not within the ramp up or ramp down period.
 		if *rampUp < int(currentRuntime.Seconds()) && int(currentRuntime.Seconds()) < *timeout-*rampDown {
 			lattputFile.WriteString(fmt.Sprintf("%d %f %f %d %d %f\n", endTime.UnixNano(), avg, tput, count, totalOrs, avgCommit))
