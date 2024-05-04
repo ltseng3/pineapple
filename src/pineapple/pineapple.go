@@ -13,7 +13,7 @@ import (
 	"pineapple/src/state"
 )
 
-const CLOCK = 1000 * 10
+const CLOCK = 1000 * 5
 const CHAN_BUFFER_SIZE = 200000
 const TRUE = uint8(1)
 const FALSE = uint8(0)
