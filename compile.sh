@@ -4,4 +4,5 @@ go install pineapple/src/master
 go install pineapple/src/server
 go install pineapple/src/client
 go install pineapple/src/clientnew
+go install pineapple/src/clientWAN
 export GOBIN=
